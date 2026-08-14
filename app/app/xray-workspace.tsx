@@ -6,7 +6,7 @@ import { createPublicClient, createWalletClient, custom, encodeFunctionData, htt
 import { analyzeCase, canonicalizeReport } from "@/lib/risk-engine.mjs";
 import { demoCase } from "@/lib/demo-case.mjs";
 import { dueviaRegistryAbi, dueviaRegistryBytecode } from "@/lib/duevia-registry-artifact";
-import { analyzePortfolio, parseAssetTapeCsv } from "@/lib/portfolio-engine.mjs";
+import { analyzePortfolio, parseAssetTapeCsv, parsePaymentsCsv } from "@/lib/portfolio-engine.mjs";
 import { portfolioDemo } from "@/lib/portfolio-demo.mjs";
 
 type EthereumProvider = { request(args: { method: string; params?: unknown[] | Record<string, unknown> }): Promise<unknown> };
@@ -32,8 +32,8 @@ const xLayerTestnet = {
 const zeroHash = `0x${"0".repeat(64)}` as Hex;
 
 function shortAddress(value: string) { return `${value.slice(0, 6)}…${value.slice(-4)}`; }
-async function fingerprint(report: Report) {
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(canonicalizeReport(report)));
+async function fingerprint(report: unknown) {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(canonicalizeReport(report as Report)));
   return `0x${Array.from(new Uint8Array(digest)).map((byte) => byte.toString(16).padStart(2, "0")).join("")}`;
 }
 
@@ -43,6 +43,7 @@ export default function DueviaWorkspace() {
   const [portfolio, setPortfolio] = useState(() => portfolioDemo);
   const [portfolioReport, setPortfolioReport] = useState(() => analyzePortfolio(portfolioDemo));
   const [portfolioSource, setPortfolioSource] = useState("Built-in stressed asset tape");
+  const [portfolioProofHash, setPortfolioProofHash] = useState("");
   const [tab, setTab] = useState<(typeof tabs)[number]>("Portfolio");
   const [activeModule, setActiveModule] = useState("risk");
   const [running, setRunning] = useState(false);
@@ -55,6 +56,7 @@ export default function DueviaWorkspace() {
   const [notice, setNotice] = useState("Workspace ready · private evidence stays in this browser");
   const fileInput = useRef<HTMLInputElement>(null);
   const portfolioFileInput = useRef<HTMLInputElement>(null);
+  const paymentFileInput = useRef<HTMLInputElement>(null);
   const registryAddress = deployedRegistry || process.env.NEXT_PUBLIC_DUEVIA_REGISTRY_ADDRESS || "";
   const selected = useMemo(() => report.modules.find((module) => module.id === activeModule) ?? report.modules[0], [activeModule, report]);
 
@@ -197,10 +199,26 @@ export default function DueviaWorkspace() {
       setPortfolio(imported);
       setPortfolioReport(analyzePortfolio(imported));
       setPortfolioSource(file.name);
+      setPortfolioProofHash("");
       setNotice(`Asset tape loaded · ${imported.assets.length} receivables evaluated against five policy controls.`);
       setTab("Portfolio");
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "The asset tape could not be parsed.");
+    }
+  };
+
+  const loadPaymentCsv = async (file: File) => {
+    try {
+      const payments = parsePaymentsCsv(await file.text());
+      const next = { ...portfolio, payments };
+      setPortfolio(next);
+      setPortfolioReport(analyzePortfolio(next));
+      setPortfolioSource(`${portfolioSource} + ${file.name}`);
+      setPortfolioProofHash("");
+      setNotice(`Payment ledger loaded · ${payments.length} cash-flow event(s) reconciled against invoice, payer, beneficiary, and balance.`);
+      setTab("Portfolio");
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "The payment ledger could not be parsed.");
     }
   };
 
@@ -214,6 +232,48 @@ export default function DueviaWorkspace() {
     link.download = "duevia-asset-tape-template.csv";
     link.click();
     URL.revokeObjectURL(url);
+  };
+
+  const downloadPaymentTemplate = () => {
+    const header = "paymentId,invoiceId,payer,beneficiaryAccount,amount,paidAt,source";
+    const sample = "PAY-100,INV-100,Example Debtor,ACCT-100,10000,2026-08-14,Bank statement";
+    const blob = new Blob([`${header}\n${sample}\n`], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "duevia-payment-ledger-template.csv";
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const preparePortfolioAttestation = async () => {
+    const hash = await fingerprint(portfolioReport);
+    setPortfolioProofHash(hash);
+    setNotice("Portfolio assurance fingerprint generated from the full asset tape, payment reconciliation, policy results, and state.");
+  };
+
+  const publishPortfolioAttestation = async () => {
+    if (!window.ethereum || !wallet || !registryAddress || !portfolioProofHash || !isAddress(registryAddress)) return;
+    try {
+      const poolId = keccak256(stringToHex(`duevia:pool:${portfolioReport.poolId}`));
+      const attestationId = keccak256(stringToHex(`duevia:pool-attestation:${portfolioReport.poolId}:${portfolioProofHash}`));
+      const policyHash = keccak256(stringToHex("RECEIVABLE_POOL_ASSURANCE_V1"));
+      const score = Math.max(0, Math.min(100, 100 - portfolioReport.metrics.highAlerts * 25 - portfolioReport.metrics.mediumAlerts * 8));
+      const status = portfolioReport.state === "verified" ? 1 : portfolioReport.state === "review" ? 2 : 4;
+      const validUntil = BigInt(Math.floor((Date.now() + 7 * 86_400_000) / 1000));
+      const data = encodeFunctionData({
+        abi: dueviaRegistryAbi,
+        functionName: "publishAttestation",
+        args: [poolId, attestationId, portfolioProofHash as Hex, policyHash, zeroHash, validUntil, score, status],
+      });
+      setNotice("Requesting wallet signature for the portfolio-state attestation...");
+      const client = createWalletClient({ chain: xLayerTestnet, transport: custom(window.ethereum) });
+      const hash = await client.sendTransaction({ account: wallet as Address, to: registryAddress as Address, data });
+      setAnchorTx(hash);
+      setNotice(`Portfolio ${portfolioReport.state.toUpperCase()} state submitted to X Layer Testnet: ${shortAddress(hash)}`);
+    } catch {
+      setNotice("Portfolio attestation was not published. Confirm the registry, wallet network, and testnet OKB balance.");
+    }
   };
 
   const evidenceRows = [
@@ -239,12 +299,13 @@ export default function DueviaWorkspace() {
       <nav className="workspace-tabs" aria-label="Asset views">{tabs.map((item) => <button key={item} type="button" className={tab === item ? "active" : ""} onClick={() => setTab(item)}>{item}</button>)}</nav>
       <div className="app-content">
         {tab === "Portfolio" && <section className="portfolio-view">
-          <div className="detail-heading portfolio-heading"><div><span>POOL ASSURANCE</span><h2>{portfolioReport.poolName}</h2><p>Asset-level reconciliation, duplicate-financing detection, freshness controls, and executable pool state.</p></div><div className="portfolio-actions"><input ref={portfolioFileInput} hidden type="file" accept="text/csv,.csv" onChange={(event) => event.target.files?.[0] && loadPortfolioCsv(event.target.files[0])} /><button className="upload-package" type="button" onClick={downloadCsvTemplate}>Download CSV template</button><button className="run-check" type="button" onClick={() => portfolioFileInput.current?.click()}>Import asset tape <span>→</span></button></div></div>
+          <div className="detail-heading portfolio-heading"><div><span>POOL ASSURANCE</span><h2>{portfolioReport.poolName}</h2><p>Cross-source reconciliation, duplicate-financing detection, freshness controls, and executable pool state.</p></div><div className="portfolio-actions"><input ref={portfolioFileInput} hidden type="file" accept="text/csv,.csv" onChange={(event) => event.target.files?.[0] && loadPortfolioCsv(event.target.files[0])} /><input ref={paymentFileInput} hidden type="file" accept="text/csv,.csv" onChange={(event) => event.target.files?.[0] && loadPaymentCsv(event.target.files[0])} /><button className="upload-package" type="button" onClick={downloadCsvTemplate}>Asset template</button><button className="upload-package" type="button" onClick={downloadPaymentTemplate}>Payment template</button><button className="run-check" type="button" onClick={() => portfolioFileInput.current?.click()}>Import asset tape <span>→</span></button><button className="run-check secondary-run" type="button" onClick={() => paymentFileInput.current?.click()}>Import payments <span>→</span></button></div></div>
           <div className="portfolio-source"><span>DATA SOURCE</span><b>{portfolioSource}</b><em>As of {new Date(portfolioReport.asOf).toLocaleDateString("en-GB")}</em></div>
           <div className="pool-metrics">
             <article><span>Pool state</span><strong className={portfolioReport.state}>{portfolioReport.state.toUpperCase()}</strong><small>{portfolioReport.metrics.highAlerts} high · {portfolioReport.metrics.mediumAlerts} medium alerts</small></article>
             <article><span>Total outstanding</span><strong>{portfolioReport.metrics.totalOutstanding.toLocaleString()} USDT</strong><small>{portfolioReport.metrics.assetCount} receivables</small></article>
             <article><span>Eligible collateral</span><strong>{portfolioReport.metrics.eligibleOutstanding.toLocaleString()} USDT</strong><small>{(portfolioReport.metrics.eligibleCoverage * 100).toFixed(1)}% of represented supply</small></article>
+            <article><span>Reconciled cash</span><strong>{portfolioReport.metrics.reconciledCash.toLocaleString()} USDT</strong><small>{portfolioReport.metrics.paymentCount} verified payment event(s)</small></article>
             <article><span>Largest debtor</span><strong>{portfolioReport.concentration[0]?.debtor || "—"}</strong><small>{((portfolioReport.concentration[0]?.share || 0) * 100).toFixed(1)}% concentration</small></article>
           </div>
           <div className="portfolio-layout">
@@ -256,7 +317,7 @@ export default function DueviaWorkspace() {
               </div>
               <div className="alert-section"><div className="panel-title"><div><span>ACTION QUEUE</span><h3>Exceptions that change pool state</h3></div></div>{portfolioReport.alerts.map((alert: Record<string, unknown>, index: number) => <article className={`portfolio-alert ${String(alert.severity)}`} key={`${String(alert.code)}-${index}`}><div><span>{String(alert.severity).toUpperCase()}</span><code>{String(alert.code)}</code></div><h4>{String(alert.title)}</h4><p>{String(alert.action)}</p><small>{Array.isArray(alert.assets) ? alert.assets.join(" · ") : ""}</small></article>)}</div>
             </div>
-            <aside className="policy-panel"><span className="proof-label">POLICY ENGINE</span><h3>Rules before capital moves.</h3><p>Transparent deterministic controls produce the onchain state. AI assists extraction and matching; it does not silently override policy.</p><div className="policy-list">{portfolioReport.policy.map((rule: Record<string, unknown>) => <div key={String(rule.id)}><i className={rule.passed ? "pass" : "fail"}>{rule.passed ? "✓" : "!"}</i><span><b>{String(rule.label)}</b><small>{String(rule.id)}</small></span></div>)}</div><div className={`execution-signal ${portfolioReport.state}`}><span>CONTRACT SIGNAL</span><strong>{portfolioReport.state === "verified" ? "ALLOW" : portfolioReport.state === "review" ? "HOLD" : "SUSPEND"}</strong><small>{portfolioReport.state === "suspended" ? "New issuance should remain blocked." : "Policy state may proceed to the registry."}</small></div><button className="anchor-button" type="button" onClick={() => { setTab("Overview"); setNotice("Portfolio state is ready to be fingerprinted and published through the asset attestation workflow."); }}>Prepare X Layer attestation</button><small className="proof-note">Raw asset data remains offchain. Only policy, state, validity, and evidence fingerprints should be published.</small></aside>
+            <aside className="policy-panel"><span className="proof-label">POLICY ENGINE</span><h3>Rules before capital moves.</h3><p>Transparent deterministic controls produce the onchain state. AI assists extraction and matching; it does not silently override policy.</p><div className="policy-list">{portfolioReport.policy.map((rule: Record<string, unknown>) => <div key={String(rule.id)}><i className={rule.passed ? "pass" : "fail"}>{rule.passed ? "✓" : "!"}</i><span><b>{String(rule.label)}</b><small>{String(rule.id)}</small></span></div>)}</div><div className={`execution-signal ${portfolioReport.state}`}><span>CONTRACT SIGNAL</span><strong>{portfolioReport.state === "verified" ? "ALLOW" : portfolioReport.state === "review" ? "HOLD" : "SUSPEND"}</strong><small>{portfolioReport.state === "suspended" ? "New issuance should remain blocked." : "Policy state may proceed to the registry."}</small></div>{portfolioProofHash && <div className="portfolio-hash"><span>PORTFOLIO FINGERPRINT</span><code>{portfolioProofHash}</code></div>}{!registryAddress && <button className="upload-package deploy-button" type="button" onClick={deployRegistry} disabled={!wallet || deploying}>{deploying ? "Deploying registry…" : !wallet ? "Connect wallet to deploy registry" : "Deploy Duevia registry"}</button>}{!portfolioProofHash ? <button className="anchor-button" type="button" onClick={preparePortfolioAttestation}>Generate portfolio fingerprint</button> : <button className="anchor-button" type="button" onClick={publishPortfolioAttestation} disabled={!wallet || !registryAddress}>{!wallet ? "Connect wallet to publish" : !registryAddress ? "Deploy registry to publish" : "Publish pool state on X Layer"}</button>}{anchorTx && <a className="proof-note" href={`https://www.oklink.com/x-layer-testnet/tx/${anchorTx}`} target="_blank" rel="noreferrer">View X Layer testnet transaction ↗</a>}<small className="proof-note">Raw asset and payment data remains offchain. Only policy, state, validity, and evidence fingerprints are published.</small></aside>
           </div>
         </section>}
         {tab === "Overview" && <>

@@ -249,10 +249,11 @@ a { color: inherit; text-decoration: none; }
 .portfolio-heading h2 { font-size: 36px; }
 .portfolio-actions { display: flex; gap: 8px; }
 .portfolio-actions .run-check { min-width: 158px; }
+.portfolio-actions .secondary-run { background: var(--blue); border-color: var(--blue); }
 .portfolio-source { margin: -10px 0 18px; padding: 11px 14px; display: flex; align-items: center; gap: 12px; border: 1px solid var(--line); background: var(--white); font-size: 9px; }
 .portfolio-source span { color: var(--blue); font-size: 7px; font-weight: 900; letter-spacing: .14em; }
 .portfolio-source em { margin-left: auto; color: var(--muted); font-style: normal; }
-.pool-metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; margin-bottom: 18px; border: 1px solid var(--line); background: var(--line); }
+.pool-metrics { display: grid; grid-template-columns: repeat(5, 1fr); gap: 1px; margin-bottom: 18px; border: 1px solid var(--line); background: var(--line); }
 .pool-metrics article { min-height: 126px; padding: 18px; display: flex; flex-direction: column; background: var(--white); }
 .pool-metrics span { color: var(--muted); font-size: 8px; text-transform: uppercase; letter-spacing: .09em; }
 .pool-metrics strong { margin: auto 0 8px; font-size: 22px; letter-spacing: -.04em; }
@@ -301,6 +302,9 @@ a { color: inherit; text-decoration: none; }
 .execution-signal.verified { background: #0f6545; }
 .execution-signal span, .execution-signal small { display: block; font-size: 7px; }
 .execution-signal strong { display: block; margin: 8px 0 5px; font-size: 26px; letter-spacing: -.04em; }
+.portfolio-hash { margin-top: 14px; padding: 11px; border: 1px solid #cbd3fa; background: var(--blue-soft); }
+.portfolio-hash span { display: block; margin-bottom: 7px; color: #5261a8; font-size: 6px; font-weight: 900; letter-spacing: .12em; }
+.portfolio-hash code { display: block; color: #25356f; font-size: 7px; line-height: 1.5; word-break: break-all; }
 
 @media (max-width: 1000px) {
   .shell { width: min(100% - 40px, 1240px); }
