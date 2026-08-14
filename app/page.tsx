@@ -1,9 +1,9 @@
 const capabilities = [
   { number: "01", title: "Evidence intelligence", copy: "Map documents, APIs, statements, and signed records to the asset claims they support.", meta: "Inputs, not just files" },
   { number: "02", title: "Entity & authority", copy: "Check issuer identity, counterparty status, signing authority, and payment beneficiary consistency.", meta: "Who can make the claim?" },
-  { number: "03", title: "Asset & cash-flow", copy: "Reconcile value, supply, delivery, payment terms, and cash-flow status at the asset level.", meta: "What backs the token?" },
+  { number: "03", title: "Asset & cash-flow", copy: "Import an asset tape, detect duplicate financing, reconcile eligible collateral, and track overdue cash flows at receivable level.", meta: "What backs the token?" },
   { number: "04", title: "Policy engine", copy: "Turn a platform’s underwriting requirements into explicit, explainable controls and review gates.", meta: "Rules before scores" },
-  { number: "05", title: "Monitor & attest", copy: "Expire stale evidence, preserve every state change, and publish a privacy-preserving assurance status to X Layer.", meta: "Proof with a lifetime" },
+  { number: "05", title: "Monitor & attest", copy: "Apply freshness and concentration limits, turn exceptions into ALLOW / HOLD / SUSPEND signals, and attest the state on X Layer.", meta: "Proof with a lifetime" },
 ];
 
 const customers = [

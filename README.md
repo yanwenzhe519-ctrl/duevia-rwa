@@ -5,6 +5,8 @@ Duevia RWA is asset assurance infrastructure for tokenized private markets. It t
 ## What the MVP demonstrates
 
 - A trade-receivable case with evidence, entity, asset, policy, and monitoring controls.
+- A working CSV asset-tape importer with duplicate-financing, delinquency, data-freshness, eligible-coverage, and debtor-concentration controls.
+- A portfolio action queue that converts exceptions into transparent ALLOW, HOLD, or SUSPEND signals.
 - Deterministic rule checks alongside an AI-ready evidence intake layer.
 - An assurance outcome: `VERIFIED`, `MANUAL REVIEW`, or `SUSPENDED`.
 - An assurance level, policy ID, validity window, exception list, and exportable attestation.

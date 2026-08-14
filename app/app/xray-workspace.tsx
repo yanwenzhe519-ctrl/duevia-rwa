@@ -6,13 +6,15 @@ import { createPublicClient, createWalletClient, custom, encodeFunctionData, htt
 import { analyzeCase, canonicalizeReport } from "@/lib/risk-engine.mjs";
 import { demoCase } from "@/lib/demo-case.mjs";
 import { dueviaRegistryAbi, dueviaRegistryBytecode } from "@/lib/duevia-registry-artifact";
+import { analyzePortfolio, parseAssetTapeCsv } from "@/lib/portfolio-engine.mjs";
+import { portfolioDemo } from "@/lib/portfolio-demo.mjs";
 
 type EthereumProvider = { request(args: { method: string; params?: unknown[] | Record<string, unknown> }): Promise<unknown> };
 type EvidenceCase = Record<string, unknown> & { asset: Record<string, unknown>; documents: unknown[] };
 type Report = ReturnType<typeof analyzeCase>;
 declare global { interface Window { ethereum?: EthereumProvider } }
 
-const tabs = ["Overview", "Evidence inbox", "Asset passport", "Monitoring", "Audit trail"] as const;
+const tabs = ["Portfolio", "Overview", "Evidence inbox", "Asset passport", "Monitoring", "Audit trail"] as const;
 const moduleIcons: Record<string, string> = { documents: "E", entity: "I", asset: "A", risk: "P", monitoring: "M" };
 const statusLabel: Record<string, string> = { verified: "VERIFIED", review: "MANUAL REVIEW", suspended: "SUSPENDED" };
 const statusCopy: Record<string, string> = {
@@ -38,7 +40,10 @@ async function fingerprint(report: Report) {
 export default function DueviaWorkspace() {
   const [caseData, setCaseData] = useState<EvidenceCase>(demoCase);
   const [report, setReport] = useState<Report>(() => analyzeCase(demoCase));
-  const [tab, setTab] = useState<(typeof tabs)[number]>("Overview");
+  const [portfolio, setPortfolio] = useState(() => portfolioDemo);
+  const [portfolioReport, setPortfolioReport] = useState(() => analyzePortfolio(portfolioDemo));
+  const [portfolioSource, setPortfolioSource] = useState("Built-in stressed asset tape");
+  const [tab, setTab] = useState<(typeof tabs)[number]>("Portfolio");
   const [activeModule, setActiveModule] = useState("risk");
   const [running, setRunning] = useState(false);
   const [uploadedName, setUploadedName] = useState("Built-in trade receivable case");
@@ -49,6 +54,7 @@ export default function DueviaWorkspace() {
   const [deploying, setDeploying] = useState(false);
   const [notice, setNotice] = useState("Workspace ready · private evidence stays in this browser");
   const fileInput = useRef<HTMLInputElement>(null);
+  const portfolioFileInput = useRef<HTMLInputElement>(null);
   const registryAddress = deployedRegistry || process.env.NEXT_PUBLIC_DUEVIA_REGISTRY_ADDRESS || "";
   const selected = useMemo(() => report.modules.find((module) => module.id === activeModule) ?? report.modules[0], [activeModule, report]);
 
@@ -181,6 +187,35 @@ export default function DueviaWorkspace() {
     URL.revokeObjectURL(url);
   };
 
+  const loadPortfolioCsv = async (file: File) => {
+    try {
+      const imported = parseAssetTapeCsv(await file.text(), {
+        poolId: "DUE-IMPORTED-01",
+        poolName: file.name.replace(/\.csv$/i, ""),
+        tokenSupply: portfolio.tokenSupply,
+      });
+      setPortfolio(imported);
+      setPortfolioReport(analyzePortfolio(imported));
+      setPortfolioSource(file.name);
+      setNotice(`Asset tape loaded · ${imported.assets.length} receivables evaluated against five policy controls.`);
+      setTab("Portfolio");
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "The asset tape could not be parsed.");
+    }
+  };
+
+  const downloadCsvTemplate = () => {
+    const header = "assetId,invoiceId,originator,debtor,faceValue,outstanding,dueDate,status,bankAccount,documentHash,source,lastUpdatedAt";
+    const sample = "AR-100,INV-100,Example Originator,Example Debtor,50000,50000,2026-09-30,active,ACCT-100,sha256:replace-me,ERP,2026-08-14";
+    const blob = new Blob([`${header}\n${sample}\n`], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "duevia-asset-tape-template.csv";
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
   const evidenceRows = [
     ["Issuer identity", "KYB / registration extract", "Verified", "entity"],
     ["Underlying obligation", "Invoice + purchase order", "Verified", "documents"],
@@ -203,6 +238,27 @@ export default function DueviaWorkspace() {
       <header className="app-topbar"><div><span>ASSET / {report.caseId}</span><h1>{report.assetName}</h1></div><div className="app-actions"><button className="ghost-action" type="button" onClick={downloadReport}>Export attestation</button><button className="wallet-action" type="button" onClick={connectWallet}>{wallet ? shortAddress(wallet) : "Connect wallet"}</button></div></header>
       <nav className="workspace-tabs" aria-label="Asset views">{tabs.map((item) => <button key={item} type="button" className={tab === item ? "active" : ""} onClick={() => setTab(item)}>{item}</button>)}</nav>
       <div className="app-content">
+        {tab === "Portfolio" && <section className="portfolio-view">
+          <div className="detail-heading portfolio-heading"><div><span>POOL ASSURANCE</span><h2>{portfolioReport.poolName}</h2><p>Asset-level reconciliation, duplicate-financing detection, freshness controls, and executable pool state.</p></div><div className="portfolio-actions"><input ref={portfolioFileInput} hidden type="file" accept="text/csv,.csv" onChange={(event) => event.target.files?.[0] && loadPortfolioCsv(event.target.files[0])} /><button className="upload-package" type="button" onClick={downloadCsvTemplate}>Download CSV template</button><button className="run-check" type="button" onClick={() => portfolioFileInput.current?.click()}>Import asset tape <span>→</span></button></div></div>
+          <div className="portfolio-source"><span>DATA SOURCE</span><b>{portfolioSource}</b><em>As of {new Date(portfolioReport.asOf).toLocaleDateString("en-GB")}</em></div>
+          <div className="pool-metrics">
+            <article><span>Pool state</span><strong className={portfolioReport.state}>{portfolioReport.state.toUpperCase()}</strong><small>{portfolioReport.metrics.highAlerts} high · {portfolioReport.metrics.mediumAlerts} medium alerts</small></article>
+            <article><span>Total outstanding</span><strong>{portfolioReport.metrics.totalOutstanding.toLocaleString()} USDT</strong><small>{portfolioReport.metrics.assetCount} receivables</small></article>
+            <article><span>Eligible collateral</span><strong>{portfolioReport.metrics.eligibleOutstanding.toLocaleString()} USDT</strong><small>{(portfolioReport.metrics.eligibleCoverage * 100).toFixed(1)}% of represented supply</small></article>
+            <article><span>Largest debtor</span><strong>{portfolioReport.concentration[0]?.debtor || "—"}</strong><small>{((portfolioReport.concentration[0]?.share || 0) * 100).toFixed(1)}% concentration</small></article>
+          </div>
+          <div className="portfolio-layout">
+            <div className="portfolio-main">
+              <div className="panel-title"><div><span>ASSET TAPE</span><h3>Receivable-level eligibility</h3></div><b>{portfolioReport.assets.filter((asset: Record<string, unknown>) => asset.eligible).length}/{portfolioReport.assets.length} eligible</b></div>
+              <div className="asset-tape">
+                <div className="asset-head"><span>Asset</span><span>Debtor</span><span>Outstanding</span><span>Due</span><span>Source</span><span>Decision</span></div>
+                {portfolioReport.assets.map((asset: Record<string, unknown>) => <div className="asset-row" key={String(asset.assetId)}><b>{String(asset.assetId)}<small>{String(asset.invoiceId)}</small></b><span>{String(asset.debtor)}</span><span>{Number(asset.outstanding).toLocaleString()}</span><span>{String(asset.dueDate)}{Number(asset.daysPastDue) > 0 && <small className="late">{String(asset.daysPastDue)}d late</small>}</span><span>{String(asset.source || "Upload")}<small>{String(asset.lastUpdatedAt)}</small></span><em className={asset.eligible ? "eligible" : "blocked"}>{asset.eligible ? "ELIGIBLE" : "BLOCKED"}</em></div>)}
+              </div>
+              <div className="alert-section"><div className="panel-title"><div><span>ACTION QUEUE</span><h3>Exceptions that change pool state</h3></div></div>{portfolioReport.alerts.map((alert: Record<string, unknown>, index: number) => <article className={`portfolio-alert ${String(alert.severity)}`} key={`${String(alert.code)}-${index}`}><div><span>{String(alert.severity).toUpperCase()}</span><code>{String(alert.code)}</code></div><h4>{String(alert.title)}</h4><p>{String(alert.action)}</p><small>{Array.isArray(alert.assets) ? alert.assets.join(" · ") : ""}</small></article>)}</div>
+            </div>
+            <aside className="policy-panel"><span className="proof-label">POLICY ENGINE</span><h3>Rules before capital moves.</h3><p>Transparent deterministic controls produce the onchain state. AI assists extraction and matching; it does not silently override policy.</p><div className="policy-list">{portfolioReport.policy.map((rule: Record<string, unknown>) => <div key={String(rule.id)}><i className={rule.passed ? "pass" : "fail"}>{rule.passed ? "✓" : "!"}</i><span><b>{String(rule.label)}</b><small>{String(rule.id)}</small></span></div>)}</div><div className={`execution-signal ${portfolioReport.state}`}><span>CONTRACT SIGNAL</span><strong>{portfolioReport.state === "verified" ? "ALLOW" : portfolioReport.state === "review" ? "HOLD" : "SUSPEND"}</strong><small>{portfolioReport.state === "suspended" ? "New issuance should remain blocked." : "Policy state may proceed to the registry."}</small></div><button className="anchor-button" type="button" onClick={() => { setTab("Overview"); setNotice("Portfolio state is ready to be fingerprinted and published through the asset attestation workflow."); }}>Prepare X Layer attestation</button><small className="proof-note">Raw asset data remains offchain. Only policy, state, validity, and evidence fingerprints should be published.</small></aside>
+          </div>
+        </section>}
         {tab === "Overview" && <>
           <section className="case-overview"><div className="overview-copy"><span className={`status-pill ${report.status}`}>{statusLabel[report.status]}</span><h2>Evidence before issuance.</h2><p>{statusCopy[report.status]} Every exception is linked to a source and a policy control.</p></div><div className="score-dial"><strong>{report.score}</strong><span>/ 100</span><small>Assurance score</small></div><div className="overview-metrics"><div><span>Assurance level</span><b className="green">{report.assuranceLevel.slice(0, 2)}</b></div><div><span>Open exceptions</span><b className="amber">{report.counts.high + report.counts.medium}</b></div><div><span>Policy</span><b className="green">V1</b></div></div></section>
           <section className="verification-toolbar"><div className="evidence-source"><span>Evidence package</span><b>{uploadedName}</b><small>Local processing · raw evidence is not written onchain</small></div><input ref={fileInput} hidden type="file" accept="application/json,.json" onChange={(event) => event.target.files?.[0] && loadEvidencePackage(event.target.files[0])} /><button className="upload-package" type="button" onClick={() => loadBuiltInScenario(true)}>Load eligible sample</button><button className="run-check" type="button" onClick={runVerification} disabled={running}>{running ? "Evaluating policy…" : "Run assurance policy"}<span>→</span></button></section>
