@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://duevia-rwa.yanwenzhe519.chatgpt.site"),
+  metadataBase: new URL("https://xray-rwa.yanwenzhe519.chatgpt.site"),
   title: "Duevia RWA — Asset assurance for tokenized private markets",
   description: "Turn fragmented offchain evidence into policy-enforceable asset assurance on X Layer.",
   icons: { icon: "/duevia-avatar.png", shortcut: "/duevia-avatar.png" },

@@ -1,10 +1,11 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { createWalletClient, custom, encodeFunctionData, isAddress, keccak256, stringToHex, type Address, type Hex } from "viem";
+import { createPublicClient, createWalletClient, custom, encodeFunctionData, http, isAddress, keccak256, stringToHex, type Address, type Hex } from "viem";
 import { analyzeCase, canonicalizeReport } from "@/lib/risk-engine.mjs";
 import { demoCase } from "@/lib/demo-case.mjs";
+import { dueviaRegistryAbi, dueviaRegistryBytecode } from "@/lib/duevia-registry-artifact";
 
 type EthereumProvider = { request(args: { method: string; params?: unknown[] | Record<string, unknown> }): Promise<unknown> };
 type EvidenceCase = Record<string, unknown> & { asset: Record<string, unknown>; documents: unknown[] };
@@ -26,16 +27,6 @@ const xLayerTestnet = {
   rpcUrls: { default: { http: ["https://testrpc.xlayer.tech"] } },
   blockExplorers: { default: { name: "OKLink", url: "https://www.oklink.com/x-layer-testnet" } },
 } as const;
-const registryAbi = [{
-  type: "function",
-  name: "publishAttestation",
-  stateMutability: "nonpayable",
-  inputs: [
-    { name: "assetId", type: "bytes32" }, { name: "attestationId", type: "bytes32" }, { name: "evidenceRoot", type: "bytes32" }, { name: "policyHash", type: "bytes32" },
-    { name: "previousAttestation", type: "bytes32" }, { name: "validUntil", type: "uint64" }, { name: "score", type: "uint8" }, { name: "status", type: "uint8" },
-  ],
-  outputs: [],
-}] as const;
 const zeroHash = `0x${"0".repeat(64)}` as Hex;
 
 function shortAddress(value: string) { return `${value.slice(0, 6)}…${value.slice(-4)}`; }
@@ -54,10 +45,17 @@ export default function DueviaWorkspace() {
   const [proofHash, setProofHash] = useState("");
   const [wallet, setWallet] = useState("");
   const [anchorTx, setAnchorTx] = useState("");
+  const [deployedRegistry, setDeployedRegistry] = useState("");
+  const [deploying, setDeploying] = useState(false);
   const [notice, setNotice] = useState("Workspace ready · private evidence stays in this browser");
   const fileInput = useRef<HTMLInputElement>(null);
-  const registryAddress = process.env.NEXT_PUBLIC_DUEVIA_REGISTRY_ADDRESS ?? "";
+  const registryAddress = deployedRegistry || process.env.NEXT_PUBLIC_DUEVIA_REGISTRY_ADDRESS || "";
   const selected = useMemo(() => report.modules.find((module) => module.id === activeModule) ?? report.modules[0], [activeModule, report]);
+
+  useEffect(() => {
+    const saved = window.localStorage.getItem("duevia-testnet-registry");
+    if (saved && isAddress(saved)) setDeployedRegistry(saved);
+  }, []);
 
   const runVerification = async () => {
     setRunning(true);
@@ -102,6 +100,54 @@ export default function DueviaWorkspace() {
     } catch { setNotice("Wallet connection was cancelled or the X Layer network could not be added."); }
   };
 
+  const deployRegistry = async () => {
+    if (!window.ethereum || !wallet) {
+      setNotice("Connect an EVM wallet first. Deployment needs a small amount of X Layer Testnet OKB.");
+      return;
+    }
+    try {
+      setDeploying(true);
+      setNotice("Requesting wallet approval to deploy the Duevia testnet registry...");
+      const walletClient = createWalletClient({ chain: xLayerTestnet, transport: custom(window.ethereum) });
+      const hash = await walletClient.deployContract({ account: wallet as Address, abi: dueviaRegistryAbi, bytecode: dueviaRegistryBytecode });
+      setNotice("Registry transaction submitted. Waiting for X Layer Testnet confirmation...");
+      const publicClient = createPublicClient({ chain: xLayerTestnet, transport: http("https://testrpc.xlayer.tech") });
+      const receipt = await publicClient.waitForTransactionReceipt({ hash });
+      if (!receipt.contractAddress) throw new Error("No contract address returned");
+      setDeployedRegistry(receipt.contractAddress);
+      window.localStorage.setItem("duevia-testnet-registry", receipt.contractAddress);
+      setAnchorTx(hash);
+      setNotice(`Testnet registry deployed: ${shortAddress(receipt.contractAddress)}. You are its first authorized attestor.`);
+    } catch {
+      setNotice("Registry deployment was not completed. Check the wallet network, confirm the transaction, and make sure the wallet has testnet OKB.");
+    } finally {
+      setDeploying(false);
+    }
+  };
+
+  const loadBuiltInScenario = (eligible: boolean) => {
+    const next = structuredClone(demoCase) as EvidenceCase;
+    next.caseId = eligible ? "INV-2026-0814-PASS" : "INV-2026-0814-REVIEW";
+    next.asset.name = eligible ? "Nova Components Receivable — eligible sample" : "Nova Components Receivable — review sample";
+    if (eligible) {
+      const issuer = next.issuer as Record<string, unknown>;
+      issuer.bankAccountHolder = issuer.legalName;
+      const documents = next.documents as Array<Record<string, unknown>>;
+      const invoice = documents.find((item) => item.type === "invoice");
+      if (invoice) invoice.dueDate = "2026-08-31";
+      const payment = documents.find((item) => item.type === "payment_instruction");
+      if (payment) payment.accountHolder = issuer.legalName;
+    }
+    setCaseData(next);
+    setReport(analyzeCase(next));
+    setUploadedName(eligible ? "Built-in eligible trade receivable" : "Built-in review trade receivable");
+    setProofHash("");
+    setAnchorTx("");
+    setNotice(eligible
+      ? "Eligible sample loaded. Run the policy to create a VERIFIED testnet attestation."
+      : "Review sample loaded. It intentionally contains a beneficiary conflict for analyst review.");
+  };
+
   const publishAttestation = async () => {
     if (!window.ethereum || !wallet || !registryAddress || !proofHash || !isAddress(registryAddress)) return;
     try {
@@ -111,7 +157,7 @@ export default function DueviaWorkspace() {
       const validUntil = Math.floor(Math.max(Date.now() + 86_400_000, report.validUntil ? new Date(report.validUntil).getTime() : 0) / 1000);
       const status = report.status === "verified" ? 1 : report.status === "review" ? 2 : 4;
       const data = encodeFunctionData({
-        abi: registryAbi,
+        abi: dueviaRegistryAbi,
         functionName: "publishAttestation",
         args: [assetId, attestationId, proofHash as Hex, policyHash, zeroHash, BigInt(validUntil), report.score, status],
       });
@@ -159,10 +205,10 @@ export default function DueviaWorkspace() {
       <div className="app-content">
         {tab === "Overview" && <>
           <section className="case-overview"><div className="overview-copy"><span className={`status-pill ${report.status}`}>{statusLabel[report.status]}</span><h2>Evidence before issuance.</h2><p>{statusCopy[report.status]} Every exception is linked to a source and a policy control.</p></div><div className="score-dial"><strong>{report.score}</strong><span>/ 100</span><small>Assurance score</small></div><div className="overview-metrics"><div><span>Assurance level</span><b className="green">{report.assuranceLevel.slice(0, 2)}</b></div><div><span>Open exceptions</span><b className="amber">{report.counts.high + report.counts.medium}</b></div><div><span>Policy</span><b className="green">V1</b></div></div></section>
-          <section className="verification-toolbar"><div className="evidence-source"><span>Evidence package</span><b>{uploadedName}</b><small>Local processing · raw evidence is not written onchain</small></div><input ref={fileInput} hidden type="file" accept="application/json,.json" onChange={(event) => event.target.files?.[0] && loadEvidencePackage(event.target.files[0])} /><button className="upload-package" type="button" onClick={() => fileInput.current?.click()}>Load JSON evidence</button><button className="run-check" type="button" onClick={runVerification} disabled={running}>{running ? "Evaluating policy…" : "Run assurance policy"}<span>→</span></button></section>
+          <section className="verification-toolbar"><div className="evidence-source"><span>Evidence package</span><b>{uploadedName}</b><small>Local processing · raw evidence is not written onchain</small></div><input ref={fileInput} hidden type="file" accept="application/json,.json" onChange={(event) => event.target.files?.[0] && loadEvidencePackage(event.target.files[0])} /><button className="upload-package" type="button" onClick={() => loadBuiltInScenario(true)}>Load eligible sample</button><button className="run-check" type="button" onClick={runVerification} disabled={running}>{running ? "Evaluating policy…" : "Run assurance policy"}<span>→</span></button></section>
           <div className="status-line"><i className={running ? "scanning" : ""} /><span>{notice}</span></div>
           <section className="module-workspace"><div className="module-panel"><div className="module-panel-head"><div><span>CONTROL {String(report.modules.findIndex((module) => module.id === selected.id) + 1).padStart(2, "0")}</span><h3>{selected.name}</h3><p>{selected.summary}</p></div><div className={`module-score ${selected.status}`}><strong>{selected.score}</strong><span>/100</span></div></div><div className="finding-stack">{selected.findings.length ? selected.findings.map((item) => <article key={`${item.code}-${item.title}`} className={`finding-card ${item.severity}`}><div className="finding-top"><span>{item.severity}</span><code>{item.code}</code></div><h4>{item.title}</h4><p>{item.explanation}</p>{item.evidence?.length > 0 && <div className="evidence-links">{item.evidence.map((evidence) => <button type="button" key={evidence}>↗ {evidence}</button>)}</div>}</article>) : <div className="no-findings">No material exceptions detected in this control.</div>}</div></div>
-          <aside className="proof-panel"><span className="proof-label">ASSET ATTESTATION</span><h3>Private evidence. Public status.</h3><p>Duevia publishes a fingerprint, policy, status, and validity window to X Layer—not raw commercial data.</p><div className="hash-box"><span>ATTESTATION FINGERPRINT</span><code>{proofHash || "Run assurance policy to generate"}</code></div><dl><div><dt>Assurance</dt><dd>{report.assuranceLevel}</dd></div><div><dt>Policy</dt><dd>{report.policyId}</dd></div><div><dt>Valid until</dt><dd>{validUntil}</dd></div><div><dt>Network</dt><dd>X Layer Testnet</dd></div></dl><button className="anchor-button" type="button" onClick={publishAttestation} disabled={!proofHash || !wallet || !registryAddress || !isAddress(registryAddress)}>{!registryAddress ? "Registry deployment pending" : !wallet ? "Connect wallet to attest" : "Publish attestation on X Layer"}</button>{anchorTx && <a className="proof-note" href={`https://www.oklink.com/x-layer-testnet/tx/${anchorTx}`} target="_blank" rel="noreferrer">View testnet transaction ↗</a>}<small className="proof-note">A deployed registry address and testnet OKB are required for a live attestation.</small></aside></section>
+          <aside className="proof-panel"><span className="proof-label">ASSET ATTESTATION</span><h3>Private evidence. Public status.</h3><p>Duevia publishes a fingerprint, policy, status, and validity window to X Layer—not raw commercial data.</p><div className="hash-box"><span>ATTESTATION FINGERPRINT</span><code>{proofHash || "Run assurance policy to generate"}</code></div><dl><div><dt>Assurance</dt><dd>{report.assuranceLevel}</dd></div><div><dt>Policy</dt><dd>{report.policyId}</dd></div><div><dt>Valid until</dt><dd>{validUntil}</dd></div><div><dt>Network</dt><dd>X Layer Testnet</dd></div></dl>{!registryAddress && <button className="upload-package deploy-button" type="button" onClick={deployRegistry} disabled={!wallet || deploying}>{deploying ? "Deploying registry…" : !wallet ? "Connect wallet to deploy" : "Deploy Duevia testnet registry"}</button>}<button className="anchor-button" type="button" onClick={publishAttestation} disabled={!proofHash || !wallet || !registryAddress || !isAddress(registryAddress)}>{!registryAddress ? "Deploy registry first" : !wallet ? "Connect wallet to attest" : "Publish attestation on X Layer"}</button>{anchorTx && <a className="proof-note" href={`https://www.oklink.com/x-layer-testnet/tx/${anchorTx}`} target="_blank" rel="noreferrer">View testnet transaction ↗</a>}<small className="proof-note">{registryAddress ? `Registry: ${shortAddress(registryAddress)} · stored only in this browser` : "Deploy a personal testnet registry from this browser. Testnet OKB is required."}</small></aside></section>
         </>}
         {tab === "Evidence inbox" && <section className="detail-view"><div className="detail-heading"><div><span>CASE EVIDENCE</span><h2>Evidence inbox</h2><p>Each claim is mapped to a source, a control, and a next action.</p></div><button className="upload-package" type="button" onClick={() => fileInput.current?.click()}>Load JSON evidence</button></div><div className="evidence-table"><div className="table-head"><span>Coverage</span><span>Evidence item</span><span>Status</span><span>Control</span></div>{evidenceRows.map(([coverage, item, status, module]) => <div className="table-row" key={coverage}><b>{coverage}</b><span>{item}</span><em className={status.toLowerCase()}>{status}</em><button type="button" onClick={() => { setActiveModule(module); setTab("Overview"); }}>{moduleIcons[module]}</button></div>)}</div><div className="empty-drop">Connector-ready inputs: API, CSV, signed record, or structured evidence package <span>The browser demo currently processes structured JSON locally.</span></div></section>}
         {tab === "Asset passport" && <section className="detail-view"><div className="detail-heading"><div><span>ASSET PASSPORT</span><h2>Portable assurance profile</h2><p>A decision-ready status for issuers, allocators, and integrated contracts.</p></div><span className={`status-pill ${report.status}`}>{statusLabel[report.status]}</span></div><div className="passport-grid"><div><span>Asset type</span><strong>{String(caseData.asset.type ?? "Trade receivable")}</strong></div><div><span>Reported value</span><strong>{Number(caseData.asset.reportedValue ?? 0).toLocaleString()} USDT</strong></div><div><span>Issuer</span><strong>{String((caseData.issuer as Record<string, unknown>)?.legalName ?? "Unknown")}</strong></div><div><span>Assurance level</span><strong>{report.assuranceLevel}</strong></div><div><span>Policy</span><strong>{report.policyId}</strong></div><div><span>Valid until</span><strong>{validUntil}</strong></div></div><div className="passport-callout"><b>Decision rationale</b><p>{report.disclaimer}</p></div></section>}

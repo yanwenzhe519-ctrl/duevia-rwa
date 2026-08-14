@@ -237,6 +237,8 @@ a { color: inherit; text-decoration: none; }
 .proof-panel dt { color: #888a90; }
 .proof-panel dd { margin: 0; text-align: right; font-weight: 750; }
 .anchor-button { width: 100%; margin-top: 17px; color: white; border-color: var(--blue); background: var(--blue); }
+.deploy-button { width: 100%; margin-top: 17px; color: #26366f; border-color: #cbd3fa; background: var(--blue-soft); }
+.deploy-button:disabled { color: #8b8e94; border-color: #d1d2d6; background: #e7e5df; cursor: not-allowed; }
 .anchor-button:disabled { color: #8b8e94; border-color: #d1d2d6; background: #e7e5df; cursor: not-allowed; }
 .proof-note { display: block; margin-top: 10px; color: #8b8e94; font-size: 7px; line-height: 1.5; text-align: center; }
 .app-disclaimer { margin: 14px 0 0; color: #8a8c91; font-size: 7px; line-height: 1.5; }
