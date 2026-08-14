@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://xray-rwa.yanwenzhe519.chatgpt.site"),
   title: "X-Ray RWA — Verify Before You Trust",
   description: "AI-powered RWA verification and risk intelligence, with tamper-evident proof on X Layer.",
   icons: {
