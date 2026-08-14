@@ -46,7 +46,7 @@ export default function DueviaWorkspace() {
   const [portfolioReport, setPortfolioReport] = useState(() => analyzePortfolio(portfolioDemo));
   const [portfolioSource, setPortfolioSource] = useState("Built-in stressed asset tape");
   const [portfolioProofHash, setPortfolioProofHash] = useState("");
-  const [tab, setTab] = useState<(typeof tabs)[number]>("AI Investigator");
+  const [tab, setTab] = useState<(typeof tabs)[number]>("Continuity Agent");
   const [activeModule, setActiveModule] = useState("risk");
   const [running, setRunning] = useState(false);
   const [uploadedName, setUploadedName] = useState("Built-in trade receivable case");
@@ -64,6 +64,8 @@ export default function DueviaWorkspace() {
 
   useEffect(() => {
     const saved = window.localStorage.getItem("duevia-testnet-registry");
+    // Restore the last user-deployed registry after hydration.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (saved && isAddress(saved)) setDeployedRegistry(saved);
   }, []);
 
