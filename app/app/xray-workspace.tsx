@@ -9,13 +9,14 @@ import { dueviaRegistryAbi, dueviaRegistryBytecode } from "@/lib/duevia-registry
 import { analyzePortfolio, parseAssetTapeCsv, parsePaymentsCsv } from "@/lib/portfolio-engine.mjs";
 import { portfolioDemo } from "@/lib/portfolio-demo.mjs";
 import AiInvestigator from "./ai-investigator";
+import ContinuityAgent from "./continuity-agent";
 
 type EthereumProvider = { request(args: { method: string; params?: unknown[] | Record<string, unknown> }): Promise<unknown> };
 type EvidenceCase = Record<string, unknown> & { asset: Record<string, unknown>; documents: unknown[] };
 type Report = ReturnType<typeof analyzeCase>;
 declare global { interface Window { ethereum?: EthereumProvider } }
 
-const tabs = ["AI Investigator", "Portfolio controls", "Asset verification", "Asset passport", "Monitoring", "Audit trail"] as const;
+const tabs = ["Continuity Agent", "AI Investigator", "Portfolio controls", "Asset verification", "Asset passport", "Monitoring", "Audit trail"] as const;
 const moduleIcons: Record<string, string> = { documents: "E", entity: "I", asset: "A", risk: "P", monitoring: "M" };
 const statusLabel: Record<string, string> = { verified: "VERIFIED", review: "MANUAL REVIEW", suspended: "SUSPENDED" };
 const statusCopy: Record<string, string> = {
@@ -277,6 +278,24 @@ export default function DueviaWorkspace() {
     }
   };
 
+  const publishContinuityState = async () => {
+    if (!window.ethereum || !wallet || !registryAddress || !isAddress(registryAddress)) throw new Error("Wallet and registry required");
+    const assetId = keccak256(stringToHex("duevia:pool:continuity-demo"));
+    const recoveryRoot = keccak256(stringToHex("duevia:recovery:servicer-offline:v1:18-assets:3-payments"));
+    const attestationId = keccak256(stringToHex(`duevia:continuity:${Date.now()}`));
+    const policyHash = keccak256(stringToHex("DUEVIA_CONTINUITY_FAILOVER_V1"));
+    const validUntil = BigInt(Math.floor((Date.now() + 7 * 86_400_000) / 1000));
+    const data = encodeFunctionData({
+      abi: dueviaRegistryAbi,
+      functionName: "publishAttestation",
+      args: [assetId, attestationId, recoveryRoot, policyHash, zeroHash, validUntil, 88, 1],
+    });
+    const client = createWalletClient({ chain: xLayerTestnet, transport: custom(window.ethereum) });
+    const hash = await client.sendTransaction({ account: wallet as Address, to: registryAddress as Address, data });
+    setAnchorTx(hash);
+    setNotice(`Continuity recovery attestation submitted to X Layer Testnet: ${shortAddress(hash)}`);
+  };
+
   const validUntil = report.validUntil ? new Date(report.validUntil).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" }) : "Not set";
 
   return <main className="dapp-shell">
@@ -292,6 +311,7 @@ export default function DueviaWorkspace() {
       <header className="app-topbar"><div><span>ASSET / {report.caseId}</span><h1>{report.assetName}</h1></div><div className="app-actions"><button className="ghost-action" type="button" onClick={downloadReport}>Export attestation</button><button className="wallet-action" type="button" onClick={connectWallet}>{wallet ? shortAddress(wallet) : "Connect wallet"}</button></div></header>
       <nav className="workspace-tabs" aria-label="Asset views">{tabs.map((item) => <button key={item} type="button" className={tab === item ? "active" : ""} onClick={() => setTab(item)}>{item}</button>)}</nav>
       <div className="app-content">
+        {tab === "Continuity Agent" && <ContinuityAgent onPublishState={publishContinuityState} />}
         {tab === "AI Investigator" && <AiInvestigator report={portfolioReport} sourceName={portfolioSource} onOpenPortfolio={() => setTab("Portfolio controls")} />}
         {tab === "Portfolio controls" && <section className="portfolio-view">
           <div className="detail-heading portfolio-heading"><div><span>POLICY & EXECUTION</span><h2>{portfolioReport.poolName}</h2><p>The AI investigation layer resolves signals here into transparent eligibility controls and an executable pool state.</p></div><button className="ghost-action" type="button" onClick={() => setTab("AI Investigator")}>← Back to AI Investigator</button></div>
