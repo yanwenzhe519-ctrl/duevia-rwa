@@ -1,9 +1,9 @@
 const capabilities = [
-  { number: "01", title: "Evidence intelligence", copy: "Map documents, APIs, statements, and signed records to the asset claims they support.", meta: "Inputs, not just files" },
-  { number: "02", title: "Entity & authority", copy: "Check issuer identity, counterparty status, signing authority, and payment beneficiary consistency.", meta: "Who can make the claim?" },
-  { number: "03", title: "Asset & cash-flow", copy: "Import an asset tape, detect duplicate financing, reconcile eligible collateral, and track overdue cash flows at receivable level.", meta: "What backs the token?" },
-  { number: "04", title: "Policy engine", copy: "Turn a platform’s underwriting requirements into explicit, explainable controls and review gates.", meta: "Rules before scores" },
-  { number: "05", title: "Monitor & attest", copy: "Apply freshness and concentration limits, turn exceptions into ALLOW / HOLD / SUSPEND signals, and attest the state on X Layer.", meta: "Proof with a lifetime" },
+  { number: "01", title: "AI investigation", copy: "Start with a goal, issuer, asset, or contract. Duevia plans the investigation and gathers the relevant signals.", meta: "One command, not one form" },
+  { number: "02", title: "Asset knowledge graph", copy: "Resolve issuers, debtors, invoices, payments, documents, and contracts into a traceable relationship graph.", meta: "Context before conclusions" },
+  { number: "03", title: "Autonomous anomaly hunt", copy: "Continuously investigate duplicate financing, payment conflicts, stale evidence, concentration, and collateral gaps.", meta: "Find what humans miss" },
+  { number: "04", title: "Grounded AI analyst", copy: "Ask why a pool is blocked, what changed, and which evidence is missing. Every answer remains linked to source records.", meta: "Explainable by design" },
+  { number: "05", title: "Agent-to-contract actions", copy: "Convert verified findings into ALLOW, HOLD, or SUSPEND signals and publish a privacy-preserving state on X Layer.", meta: "Intelligence that executes" },
 ];
 
 const customers = [
@@ -23,30 +23,30 @@ export default function Home() {
 
       <section className="xray-hero shell" id="top">
         <div className="hero-grid-line line-a" /><div className="hero-grid-line line-b" />
-        <div className="xray-kicker"><i /> AI · RWA · X LAYER</div>
-        <h1>Verify what<br />backs the asset.</h1>
+        <div className="xray-kicker"><i /> AGENTIC AI · RWA · X LAYER</div>
+        <h1>Investigate assets.<br />Execute trust.</h1>
         <div className="hero-bottom">
-          <p>Duevia turns fragmented offchain evidence into policy-enforceable asset assurance—so tokenized private-market assets can be assessed, monitored, and used with clearer conditions on X Layer.</p>
-          <div className="hero-buttons"><a className="button-dark" href="/app">Run an assurance check <span>↗</span></a><a className="button-quiet" href="#platform">How it works</a></div>
+          <p>Duevia is an AI investigation and decision layer for RWA. Agents map live asset signals, explain material risk, and turn grounded findings into enforceable X Layer actions.</p>
+          <div className="hero-buttons"><a className="button-dark" href="/app">Run Duevia Agent <span>↗</span></a><a className="button-quiet" href="#platform">How it works</a></div>
         </div>
         <div className="hero-proof-bar">
-          <div><b>Evidence-first</b><span>Claims linked to sources</span></div>
-          <div><b>Policy-led</b><span>Explicit eligibility controls</span></div>
-          <div><b>Private</b><span>Raw evidence remains offchain</span></div>
-          <div><b>X Layer</b><span>Attestation-ready registry</span></div>
+          <div><b>Agentic</b><span>Goal-driven investigation</span></div>
+          <div><b>Grounded</b><span>Answers linked to evidence</span></div>
+          <div><b>Continuous</b><span>Risk re-evaluated as data changes</span></div>
+          <div><b>Executable</b><span>AI findings become contract signals</span></div>
         </div>
       </section>
 
       <section className="problem-section" id="platform">
         <div className="shell problem-grid">
-          <div><span className="section-index">THE GAP / 01</span><h2>A token is not proof of the asset behind it.</h2></div>
-          <div className="problem-copy"><p>Private-market RWA data lives across accounting systems, registries, bank records, signed documents, issuer portals, and periodic reports. Onchain issuance alone does not reconcile those sources or tell a smart contract when evidence has expired.</p><p>Duevia is the assurance layer between offchain asset evidence and onchain financial actions.</p></div>
+          <div><span className="section-index">THE GAP / 01</span><h2>RWA risk moves faster than periodic review.</h2></div>
+          <div className="problem-copy"><p>Asset signals live across ledgers, banks, servicers, registries, contracts, and public information. Human review is slow, fragmented, and difficult to repeat after issuance.</p><p>Duevia gives every RWA an always-on investigation agent with visible evidence, policy boundaries, and an executable state.</p></div>
         </div>
-        <div className="shell signal-rail" aria-label="Duevia assurance flow"><span>OFFCHAIN EVIDENCE</span><i>→</i><span>AI EXTRACTION + RULES</span><i>→</i><span>ASSET ASSURANCE</span><i>→</i><span>X LAYER ACTION</span></div>
+        <div className="shell signal-rail" aria-label="Duevia agent flow"><span>INVESTIGATION GOAL</span><i>→</i><span>AI ASSET GRAPH</span><i>→</i><span>GROUNDED DECISION</span><i>→</i><span>X LAYER ACTION</span></div>
       </section>
 
       <section className="modules-section shell" id="workflow">
-        <div className="section-heading-row"><div><span className="section-index">THE PLATFORM / 02</span><h2>One asset state.<br />Five capabilities.</h2></div><p>Use the whole assurance workflow, or call the evidence, policy, monitoring, and attestation layers from an existing issuance or underwriting process.</p></div>
+        <div className="section-heading-row"><div><span className="section-index">THE AGENT / 02</span><h2>One investigation.<br />Five agent capabilities.</h2></div><p>Duevia combines model reasoning with deterministic policy and source-linked evidence. AI proposes; transparent controls and authorized humans decide.</p></div>
         <div className="module-list">{capabilities.map((item) => <article key={item.number}><span className="module-number">{item.number}</span><div><h3>{item.title}</h3><small>{item.meta}</small></div><p>{item.copy}</p><span className="module-arrow">↗</span></article>)}</div>
       </section>
 

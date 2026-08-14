@@ -8,13 +8,14 @@ import { demoCase } from "@/lib/demo-case.mjs";
 import { dueviaRegistryAbi, dueviaRegistryBytecode } from "@/lib/duevia-registry-artifact";
 import { analyzePortfolio, parseAssetTapeCsv, parsePaymentsCsv } from "@/lib/portfolio-engine.mjs";
 import { portfolioDemo } from "@/lib/portfolio-demo.mjs";
+import AiInvestigator from "./ai-investigator";
 
 type EthereumProvider = { request(args: { method: string; params?: unknown[] | Record<string, unknown> }): Promise<unknown> };
 type EvidenceCase = Record<string, unknown> & { asset: Record<string, unknown>; documents: unknown[] };
 type Report = ReturnType<typeof analyzeCase>;
 declare global { interface Window { ethereum?: EthereumProvider } }
 
-const tabs = ["Portfolio", "Overview", "Evidence inbox", "Asset passport", "Monitoring", "Audit trail"] as const;
+const tabs = ["AI Investigator", "Portfolio controls", "Asset verification", "Asset passport", "Monitoring", "Audit trail"] as const;
 const moduleIcons: Record<string, string> = { documents: "E", entity: "I", asset: "A", risk: "P", monitoring: "M" };
 const statusLabel: Record<string, string> = { verified: "VERIFIED", review: "MANUAL REVIEW", suspended: "SUSPENDED" };
 const statusCopy: Record<string, string> = {
@@ -44,7 +45,7 @@ export default function DueviaWorkspace() {
   const [portfolioReport, setPortfolioReport] = useState(() => analyzePortfolio(portfolioDemo));
   const [portfolioSource, setPortfolioSource] = useState("Built-in stressed asset tape");
   const [portfolioProofHash, setPortfolioProofHash] = useState("");
-  const [tab, setTab] = useState<(typeof tabs)[number]>("Portfolio");
+  const [tab, setTab] = useState<(typeof tabs)[number]>("AI Investigator");
   const [activeModule, setActiveModule] = useState("risk");
   const [running, setRunning] = useState(false);
   const [uploadedName, setUploadedName] = useState("Built-in trade receivable case");
@@ -74,7 +75,7 @@ export default function DueviaWorkspace() {
     setReport(next);
     setProofHash(await fingerprint(next));
     setActiveModule("risk");
-    setTab("Overview");
+    setTab("Asset verification");
     setRunning(false);
     setNotice("Assurance decision ready · fingerprint generated for X Layer");
   };
@@ -201,7 +202,7 @@ export default function DueviaWorkspace() {
       setPortfolioSource(file.name);
       setPortfolioProofHash("");
       setNotice(`Asset tape loaded · ${imported.assets.length} receivables evaluated against five policy controls.`);
-      setTab("Portfolio");
+      setTab("Portfolio controls");
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "The asset tape could not be parsed.");
     }
@@ -216,7 +217,7 @@ export default function DueviaWorkspace() {
       setPortfolioSource(`${portfolioSource} + ${file.name}`);
       setPortfolioProofHash("");
       setNotice(`Payment ledger loaded · ${payments.length} cash-flow event(s) reconciled against invoice, payer, beneficiary, and balance.`);
-      setTab("Portfolio");
+      setTab("Portfolio controls");
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "The payment ledger could not be parsed.");
     }
@@ -276,13 +277,6 @@ export default function DueviaWorkspace() {
     }
   };
 
-  const evidenceRows = [
-    ["Issuer identity", "KYB / registration extract", "Verified", "entity"],
-    ["Underlying obligation", "Invoice + purchase order", "Verified", "documents"],
-    ["Delivery evidence", "Proof of delivery", "Verified", "asset"],
-    ["Payment instruction", "Bank account letter", "Conflict", "entity"],
-    ["Cash-flow event", "Settlement status", "Review", "monitoring"],
-  ];
   const validUntil = report.validUntil ? new Date(report.validUntil).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" }) : "Not set";
 
   return <main className="dapp-shell">
@@ -290,7 +284,7 @@ export default function DueviaWorkspace() {
       <Link className="xray-brand app-brand" href="/"><span className="xray-mark">D</span><span>DUEVIA RWA</span></Link>
       <div className="case-label">ASSET WORKSPACE</div>
       <button className="case-card active" type="button"><span>TR</span><div><b>Trade receivable</b><small>{report.caseId}</small></div><i /></button>
-      <nav className="module-nav" aria-label="Duevia assurance capabilities"><span>ASSURANCE CONTROLS</span>{report.modules.map((module) => <button key={module.id} type="button" className={activeModule === module.id ? "active" : ""} onClick={() => { setActiveModule(module.id); setTab("Overview"); }}><i>{moduleIcons[module.id]}</i><span>{module.shortName}</span><em className={module.status}>{module.score}</em></button>)}</nav>
+      <nav className="module-nav" aria-label="Duevia assurance capabilities"><span>ASSURANCE CONTROLS</span>{report.modules.map((module) => <button key={module.id} type="button" className={activeModule === module.id ? "active" : ""} onClick={() => { setActiveModule(module.id); setTab("Asset verification"); }}><i>{moduleIcons[module.id]}</i><span>{module.shortName}</span><em className={module.status}>{module.score}</em></button>)}</nav>
       <div className="sidebar-bottom"><div className="network-card"><i /><div><b>X Layer Testnet</b><small>Chain ID 1952</small></div></div><Link href="/">← Website</Link></div>
     </aside>
 
@@ -298,9 +292,11 @@ export default function DueviaWorkspace() {
       <header className="app-topbar"><div><span>ASSET / {report.caseId}</span><h1>{report.assetName}</h1></div><div className="app-actions"><button className="ghost-action" type="button" onClick={downloadReport}>Export attestation</button><button className="wallet-action" type="button" onClick={connectWallet}>{wallet ? shortAddress(wallet) : "Connect wallet"}</button></div></header>
       <nav className="workspace-tabs" aria-label="Asset views">{tabs.map((item) => <button key={item} type="button" className={tab === item ? "active" : ""} onClick={() => setTab(item)}>{item}</button>)}</nav>
       <div className="app-content">
-        {tab === "Portfolio" && <section className="portfolio-view">
-          <div className="detail-heading portfolio-heading"><div><span>POOL ASSURANCE</span><h2>{portfolioReport.poolName}</h2><p>Cross-source reconciliation, duplicate-financing detection, freshness controls, and executable pool state.</p></div><div className="portfolio-actions"><input ref={portfolioFileInput} hidden type="file" accept="text/csv,.csv" onChange={(event) => event.target.files?.[0] && loadPortfolioCsv(event.target.files[0])} /><input ref={paymentFileInput} hidden type="file" accept="text/csv,.csv" onChange={(event) => event.target.files?.[0] && loadPaymentCsv(event.target.files[0])} /><button className="upload-package" type="button" onClick={downloadCsvTemplate}>Asset template</button><button className="upload-package" type="button" onClick={downloadPaymentTemplate}>Payment template</button><button className="run-check" type="button" onClick={() => portfolioFileInput.current?.click()}>Import asset tape <span>→</span></button><button className="run-check secondary-run" type="button" onClick={() => paymentFileInput.current?.click()}>Import payments <span>→</span></button></div></div>
+        {tab === "AI Investigator" && <AiInvestigator report={portfolioReport} sourceName={portfolioSource} onOpenPortfolio={() => setTab("Portfolio controls")} />}
+        {tab === "Portfolio controls" && <section className="portfolio-view">
+          <div className="detail-heading portfolio-heading"><div><span>POLICY & EXECUTION</span><h2>{portfolioReport.poolName}</h2><p>The AI investigation layer resolves signals here into transparent eligibility controls and an executable pool state.</p></div><button className="ghost-action" type="button" onClick={() => setTab("AI Investigator")}>← Back to AI Investigator</button></div>
           <div className="portfolio-source"><span>DATA SOURCE</span><b>{portfolioSource}</b><em>As of {new Date(portfolioReport.asOf).toLocaleDateString("en-GB")}</em></div>
+          <details className="manual-import"><summary>Developer data tools <span>Manual CSV import and templates</span></summary><div className="portfolio-actions"><input ref={portfolioFileInput} hidden type="file" accept="text/csv,.csv" onChange={(event) => event.target.files?.[0] && loadPortfolioCsv(event.target.files[0])} /><input ref={paymentFileInput} hidden type="file" accept="text/csv,.csv" onChange={(event) => event.target.files?.[0] && loadPaymentCsv(event.target.files[0])} /><button className="upload-package" type="button" onClick={downloadCsvTemplate}>Asset template</button><button className="upload-package" type="button" onClick={downloadPaymentTemplate}>Payment template</button><button className="run-check" type="button" onClick={() => portfolioFileInput.current?.click()}>Import asset tape <span>→</span></button><button className="run-check secondary-run" type="button" onClick={() => paymentFileInput.current?.click()}>Import payments <span>→</span></button></div></details>
           <div className="pool-metrics">
             <article><span>Pool state</span><strong className={portfolioReport.state}>{portfolioReport.state.toUpperCase()}</strong><small>{portfolioReport.metrics.highAlerts} high · {portfolioReport.metrics.mediumAlerts} medium alerts</small></article>
             <article><span>Total outstanding</span><strong>{portfolioReport.metrics.totalOutstanding.toLocaleString()} USDT</strong><small>{portfolioReport.metrics.assetCount} receivables</small></article>
@@ -320,14 +316,13 @@ export default function DueviaWorkspace() {
             <aside className="policy-panel"><span className="proof-label">POLICY ENGINE</span><h3>Rules before capital moves.</h3><p>Transparent deterministic controls produce the onchain state. AI assists extraction and matching; it does not silently override policy.</p><div className="policy-list">{portfolioReport.policy.map((rule: Record<string, unknown>) => <div key={String(rule.id)}><i className={rule.passed ? "pass" : "fail"}>{rule.passed ? "✓" : "!"}</i><span><b>{String(rule.label)}</b><small>{String(rule.id)}</small></span></div>)}</div><div className={`execution-signal ${portfolioReport.state}`}><span>CONTRACT SIGNAL</span><strong>{portfolioReport.state === "verified" ? "ALLOW" : portfolioReport.state === "review" ? "HOLD" : "SUSPEND"}</strong><small>{portfolioReport.state === "suspended" ? "New issuance should remain blocked." : "Policy state may proceed to the registry."}</small></div>{portfolioProofHash && <div className="portfolio-hash"><span>PORTFOLIO FINGERPRINT</span><code>{portfolioProofHash}</code></div>}{!registryAddress && <button className="upload-package deploy-button" type="button" onClick={deployRegistry} disabled={!wallet || deploying}>{deploying ? "Deploying registry…" : !wallet ? "Connect wallet to deploy registry" : "Deploy Duevia registry"}</button>}{!portfolioProofHash ? <button className="anchor-button" type="button" onClick={preparePortfolioAttestation}>Generate portfolio fingerprint</button> : <button className="anchor-button" type="button" onClick={publishPortfolioAttestation} disabled={!wallet || !registryAddress}>{!wallet ? "Connect wallet to publish" : !registryAddress ? "Deploy registry to publish" : "Publish pool state on X Layer"}</button>}{anchorTx && <a className="proof-note" href={`https://www.oklink.com/x-layer-testnet/tx/${anchorTx}`} target="_blank" rel="noreferrer">View X Layer testnet transaction ↗</a>}<small className="proof-note">Raw asset and payment data remains offchain. Only policy, state, validity, and evidence fingerprints are published.</small></aside>
           </div>
         </section>}
-        {tab === "Overview" && <>
+        {tab === "Asset verification" && <>
           <section className="case-overview"><div className="overview-copy"><span className={`status-pill ${report.status}`}>{statusLabel[report.status]}</span><h2>Evidence before issuance.</h2><p>{statusCopy[report.status]} Every exception is linked to a source and a policy control.</p></div><div className="score-dial"><strong>{report.score}</strong><span>/ 100</span><small>Assurance score</small></div><div className="overview-metrics"><div><span>Assurance level</span><b className="green">{report.assuranceLevel.slice(0, 2)}</b></div><div><span>Open exceptions</span><b className="amber">{report.counts.high + report.counts.medium}</b></div><div><span>Policy</span><b className="green">V1</b></div></div></section>
           <section className="verification-toolbar"><div className="evidence-source"><span>Evidence package</span><b>{uploadedName}</b><small>Local processing · raw evidence is not written onchain</small></div><input ref={fileInput} hidden type="file" accept="application/json,.json" onChange={(event) => event.target.files?.[0] && loadEvidencePackage(event.target.files[0])} /><button className="upload-package" type="button" onClick={() => loadBuiltInScenario(true)}>Load eligible sample</button><button className="run-check" type="button" onClick={runVerification} disabled={running}>{running ? "Evaluating policy…" : "Run assurance policy"}<span>→</span></button></section>
           <div className="status-line"><i className={running ? "scanning" : ""} /><span>{notice}</span></div>
           <section className="module-workspace"><div className="module-panel"><div className="module-panel-head"><div><span>CONTROL {String(report.modules.findIndex((module) => module.id === selected.id) + 1).padStart(2, "0")}</span><h3>{selected.name}</h3><p>{selected.summary}</p></div><div className={`module-score ${selected.status}`}><strong>{selected.score}</strong><span>/100</span></div></div><div className="finding-stack">{selected.findings.length ? selected.findings.map((item) => <article key={`${item.code}-${item.title}`} className={`finding-card ${item.severity}`}><div className="finding-top"><span>{item.severity}</span><code>{item.code}</code></div><h4>{item.title}</h4><p>{item.explanation}</p>{item.evidence?.length > 0 && <div className="evidence-links">{item.evidence.map((evidence) => <button type="button" key={evidence}>↗ {evidence}</button>)}</div>}</article>) : <div className="no-findings">No material exceptions detected in this control.</div>}</div></div>
           <aside className="proof-panel"><span className="proof-label">ASSET ATTESTATION</span><h3>Private evidence. Public status.</h3><p>Duevia publishes a fingerprint, policy, status, and validity window to X Layer—not raw commercial data.</p><div className="hash-box"><span>ATTESTATION FINGERPRINT</span><code>{proofHash || "Run assurance policy to generate"}</code></div><dl><div><dt>Assurance</dt><dd>{report.assuranceLevel}</dd></div><div><dt>Policy</dt><dd>{report.policyId}</dd></div><div><dt>Valid until</dt><dd>{validUntil}</dd></div><div><dt>Network</dt><dd>X Layer Testnet</dd></div></dl>{!registryAddress && <button className="upload-package deploy-button" type="button" onClick={deployRegistry} disabled={!wallet || deploying}>{deploying ? "Deploying registry…" : !wallet ? "Connect wallet to deploy" : "Deploy Duevia testnet registry"}</button>}<button className="anchor-button" type="button" onClick={publishAttestation} disabled={!proofHash || !wallet || !registryAddress || !isAddress(registryAddress)}>{!registryAddress ? "Deploy registry first" : !wallet ? "Connect wallet to attest" : "Publish attestation on X Layer"}</button>{anchorTx && <a className="proof-note" href={`https://www.oklink.com/x-layer-testnet/tx/${anchorTx}`} target="_blank" rel="noreferrer">View testnet transaction ↗</a>}<small className="proof-note">{registryAddress ? `Registry: ${shortAddress(registryAddress)} · stored only in this browser` : "Deploy a personal testnet registry from this browser. Testnet OKB is required."}</small></aside></section>
         </>}
-        {tab === "Evidence inbox" && <section className="detail-view"><div className="detail-heading"><div><span>CASE EVIDENCE</span><h2>Evidence inbox</h2><p>Each claim is mapped to a source, a control, and a next action.</p></div><button className="upload-package" type="button" onClick={() => fileInput.current?.click()}>Load JSON evidence</button></div><div className="evidence-table"><div className="table-head"><span>Coverage</span><span>Evidence item</span><span>Status</span><span>Control</span></div>{evidenceRows.map(([coverage, item, status, module]) => <div className="table-row" key={coverage}><b>{coverage}</b><span>{item}</span><em className={status.toLowerCase()}>{status}</em><button type="button" onClick={() => { setActiveModule(module); setTab("Overview"); }}>{moduleIcons[module]}</button></div>)}</div><div className="empty-drop">Connector-ready inputs: API, CSV, signed record, or structured evidence package <span>The browser demo currently processes structured JSON locally.</span></div></section>}
         {tab === "Asset passport" && <section className="detail-view"><div className="detail-heading"><div><span>ASSET PASSPORT</span><h2>Portable assurance profile</h2><p>A decision-ready status for issuers, allocators, and integrated contracts.</p></div><span className={`status-pill ${report.status}`}>{statusLabel[report.status]}</span></div><div className="passport-grid"><div><span>Asset type</span><strong>{String(caseData.asset.type ?? "Trade receivable")}</strong></div><div><span>Reported value</span><strong>{Number(caseData.asset.reportedValue ?? 0).toLocaleString()} USDT</strong></div><div><span>Issuer</span><strong>{String((caseData.issuer as Record<string, unknown>)?.legalName ?? "Unknown")}</strong></div><div><span>Assurance level</span><strong>{report.assuranceLevel}</strong></div><div><span>Policy</span><strong>{report.policyId}</strong></div><div><span>Valid until</span><strong>{validUntil}</strong></div></div><div className="passport-callout"><b>Decision rationale</b><p>{report.disclaimer}</p></div></section>}
         {tab === "Monitoring" && <section className="detail-view"><div className="detail-heading"><div><span>CONTINUOUS CONTROLS</span><h2>Monitoring</h2><p>Evidence should be refreshed before it silently becomes unreliable.</p></div><span className="live-badge"><i /> Policy cadence: daily</span></div><div className="monitor-grid"><div className="monitor-card"><span>Validity window</span><strong>{report.validUntil ? "Active" : "Unset"}</strong><small>{validUntil}</small></div><div className="monitor-card amber-card"><span>Open alerts</span><strong>{report.counts.high + report.counts.medium}</strong><small>Require analyst attention</small></div><div className="monitor-card"><span>Evidence status</span><strong>{report.status === "verified" ? "Current" : "Review"}</strong><small>Based on the current evidence package</small></div></div><div className="timeline-list"><div><b>Now</b><span>Assurance decision generated</span><em>{report.assuranceLevel}</em></div><div><b>Pending</b><span>Payment beneficiary confirmation</span><em>Owner: issuer</em></div><div><b>At expiry</b><span>Registry should move state to stale and block automatic eligibility</span><em>{validUntil}</em></div></div></section>}
         {tab === "Audit trail" && <section className="detail-view"><div className="detail-heading"><div><span>CHAIN OF CUSTODY</span><h2>Audit trail</h2><p>Versioned events for evidence, policy decisions, and X Layer attestations.</p></div></div><div className="timeline-list audit-list"><div><b>Current session</b><span>Attestation fingerprint generated</span><em>{proofHash ? `${proofHash.slice(0, 18)}…` : "Awaiting policy run"}</em></div><div><b>Current session</b><span>Five assurance controls evaluated</span><em>{report.methodology}</em></div><div><b>Current session</b><span>Evidence package loaded</span><em>{uploadedName}</em></div><div><b>Next step</b><span>Publish status to Duevia registry on X Layer Testnet</span><em>{registryAddress ? "Registry configured" : "Registry not configured"}</em></div></div></section>}

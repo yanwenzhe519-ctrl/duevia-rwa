@@ -4,14 +4,20 @@ import test from "node:test";
 
 const templateRoot = new URL("../", import.meta.url);
 
-test("the public site uses Duevia RWA asset assurance messaging", async () => {
-  const [page, layout] = await Promise.all([
+test("the public site uses Duevia RWA agentic investigation messaging", async () => {
+  const [page, layout, agent, route] = await Promise.all([
     readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/layout.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/app/ai-investigator.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/agent/route.ts", import.meta.url), "utf8"),
   ]);
-  assert.match(page, /Verify what/);
-  assert.match(page, /Asset assurance/);
-  assert.match(page, /Five capabilities/);
+  assert.match(page, /Investigate assets/);
+  assert.match(page, /always-on investigation agent/);
+  assert.match(page, /Five agent capabilities/);
+  assert.match(agent, /DUEVIA AI INVESTIGATOR/);
+  assert.match(agent, /AI proposes/);
+  assert.match(route, /OPENAI_API_KEY/);
+  assert.match(route, /store: false/);
   assert.match(layout, /Duevia RWA/);
   assert.doesNotMatch(page, /ProofFlow|Starter Project|codex-preview/);
 });
