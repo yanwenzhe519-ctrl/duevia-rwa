@@ -1,43 +1,37 @@
-# X-Ray RWA
+# Duevia RWA
 
-AI-powered verification and risk intelligence for real-world assets. X-Ray RWA turns fragmented offchain evidence into structured, explainable findings and tamper-evident proof on X Layer.
+Duevia RWA is asset assurance infrastructure for tokenized private markets. It turns fragmented offchain evidence into a versioned, policy-enforceable assurance status that can be monitored and anchored on X Layer without publishing private commercial data.
+
+## What the MVP demonstrates
+
+- A trade-receivable case with evidence, entity, asset, policy, and monitoring controls.
+- Deterministic rule checks alongside an AI-ready evidence intake layer.
+- An assurance outcome: `VERIFIED`, `MANUAL REVIEW`, or `SUSPENDED`.
+- An assurance level, policy ID, validity window, exception list, and exportable attestation.
+- Wallet connection to X Layer Testnet (chain ID `1952`).
+- A contract design in which an asset must have a valid Duevia attestation before an integrated pool or mint flow can accept it.
 
 ## Product surfaces
 
-- `/` — English marketing site explaining the verification infrastructure, five modules, users, and business model.
-- `/app` — DApp workspace for loading a structured evidence package, running all five modules, reviewing findings, generating a report fingerprint, and connecting an EVM wallet to X Layer Testnet.
+- `/` — public product site.
+- `/app` — interactive asset-assurance workspace.
 
-## Five modules
-
-1. Document Intelligence — classify evidence, extract material fields, and reconcile amounts.
-2. Entity & Counterparty — review issuer, KYB, sanctions, and payment-account signals.
-3. Asset & Cash-flow — compare reported value, represented supply, payment terms, and delivery dates.
-4. Explainable Risk — produce a comparable score with reason codes and review actions.
-5. Monitoring & Proof — track freshness, preserve report versions, and anchor fingerprints on X Layer.
-
-The current MVP runs the evidence model locally so that the demo remains deterministic and does not expose private documents. The next integration point is a provider-backed OCR/LLM extraction service; the rule layer remains deterministic and auditable.
+The current browser demo accepts structured JSON so results stay deterministic and no raw evidence is uploaded to a third party. PDF, CSV, accounting, banking, and registry connectors are deliberate next-stage inputs rather than simulated live integrations.
 
 ## Onchain design
 
-`contracts/XRayProofRegistry.sol` stores only the report ID, evidence fingerprint, score, status, issuer, and version link. Raw files never enter the contract. The contract is intentionally small and supports a revocable versioned proof trail.
+`contracts/DueviaAssetAssuranceRegistry.sol` stores only the evidence fingerprint, policy fingerprint, score, status, validity window, and attestor. It supports authorized attestors, status changes, expiry checks, and an `isEligible` query.
+
+`contracts/DueviaEligibilityGuard.sol` shows how an issuance, pool, or market contract can require a current verified Duevia attestation before accepting an asset.
+
+Set `NEXT_PUBLIC_DUEVIA_REGISTRY_ADDRESS` after deploying the registry to enable live attestation publishing in the DApp.
 
 X Layer Testnet configuration:
 
-- Chain ID: `1952` (`0x7A0`)
-- RPC: `https://xlayertestrpc.okx.com/terigon`
-- Explorer: `https://www.okx.com/web3/explorer/xlayer-test`
+- Chain ID: `1952` (`0x7a0`)
+- RPC: `https://testrpc.xlayer.tech`
+- Explorer: `https://www.oklink.com/x-layer-testnet`
 
-Set `NEXT_PUBLIC_XRAY_REGISTRY_ADDRESS` after deploying the registry to enable the final anchor action in the DApp.
+## Scope
 
-## Local development
-
-```bash
-npm install
-npm run dev
-npm run build
-npm test
-```
-
-## Scope and disclaimer
-
-X-Ray RWA checks submitted evidence and data consistency. It is not a legal opinion, an audit, investment advice, a KYC provider, or a guarantee of asset ownership or repayment.
+Duevia checks submitted evidence and deterministic consistency controls. It is not a legal opinion, audit, credit rating, KYC provider, investment recommendation, or guarantee of asset ownership or repayment.

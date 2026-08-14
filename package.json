@@ -1,5 +1,5 @@
 {
-  "name": "xray-rwa",
+  "name": "duevia-rwa",
   "version": "0.1.0",
   "private": true,
   "engines": {
@@ -16,7 +16,8 @@
   "dependencies": {
     "drizzle-orm": "0.45.2",
     "react": "19.2.6",
-    "react-dom": "19.2.6"
+    "react-dom": "19.2.6",
+    "viem": "^2.45.1"
   },
   "devDependencies": {
     "@cloudflare/vite-plugin": "1.37.1",

@@ -144,6 +144,7 @@ a { color: inherit; text-decoration: none; }
 .module-nav em.verified { color: #63d8a6; }
 .module-nav em.review { color: #efb753; }
 .module-nav em.high-risk { color: #ff7770; }
+.module-nav em.suspended { color: #ff7770; }
 .sidebar-bottom { margin-top: auto; }
 .network-card { margin-bottom: 15px; padding: 11px; display: flex; align-items: center; gap: 10px; border: 1px solid #303238; }
 .network-card>i { width: 7px; height: 7px; border-radius: 50%; background: #3ee39c; }
@@ -165,6 +166,7 @@ a { color: inherit; text-decoration: none; }
 .status-pill.review { color: #805400; background: #f3dca9; }
 .status-pill.verified { color: #0c6d47; background: #c9efdf; }
 .status-pill.high-risk { color: #9b2923; background: #f7c9c4; }
+.status-pill.suspended { color: #9b2923; background: #f7c9c4; }
 .overview-copy h2 { margin: 13px 0 8px; font-size: 34px; letter-spacing: -.055em; }
 .overview-copy p { max-width: 540px; margin: 0; color: var(--muted); font-size: 12px; line-height: 1.6; }
 .score-dial { width: 145px; height: 145px; margin: auto; display: flex; flex-direction: column; align-items: center; justify-content: center; border: 8px solid #dedad0; border-top-color: var(--blue); border-radius: 50%; background: var(--paper); }
@@ -206,6 +208,7 @@ a { color: inherit; text-decoration: none; }
 .module-score.verified strong { color: var(--green); }
 .module-score.review strong { color: var(--amber); }
 .module-score.high-risk strong { color: var(--red); }
+.module-score.suspended strong { color: var(--red); }
 .finding-stack { padding: 16px; display: flex; flex-direction: column; gap: 10px; }
 .finding-card { padding: 15px; border: 1px solid var(--line); border-left-width: 3px; background: #fdfcf8; }
 .finding-card.high { border-left-color: var(--red); }
