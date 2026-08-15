@@ -50,3 +50,29 @@ test("the CREATE2 registry salt is exactly 32 bytes", async () => {
   const salt = workspace.match(/const registrySalt = `0x([0-9a-f]+)`/i)?.[1];
   assert.equal(salt?.length, 64);
 });
+
+test("continuity recovery requires linked suspended and verified attestations", async () => {
+  const [workspace, continuity] = await Promise.all([
+    readFile(new URL("../app/app/xray-workspace.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/app/continuity-agent.tsx", import.meta.url), "utf8"),
+  ]);
+  assert.match(workspace, /publishContinuityState\(4\)/);
+  assert.match(workspace, /publishContinuityState\(1, previous as Hex\)/);
+  assert.match(workspace, /previousAttestation/);
+  assert.match(continuity, /Publish SUSPENDED/);
+  assert.match(continuity, /Publish successor VERIFIED/);
+});
+
+test("the receivables pool gates real value-bearing deposits", async () => {
+  const contract = await readFile(new URL("../contracts/DueviaReceivablesPool.sol", import.meta.url), "utf8");
+  assert.match(contract, /function deposit\(bytes32 attestationId\) external payable/);
+  assert.match(contract, /guard\.requireEligible\(attestationId\)/);
+  assert.match(contract, /balances\[msg\.sender\] \+= msg\.value/);
+  assert.match(contract, /function withdraw\(uint256 amount\)/);
+});
+
+test("servicer route uses independent represented supply", async () => {
+  const route = await readFile(new URL("../app/api/servicer-feed/route.ts", import.meta.url), "utf8");
+  assert.match(route, /tokenSupply: feed\.snapshot\.tokenSupply/);
+  assert.doesNotMatch(route, /feed\.assets\.reduce\(.*outstanding/);
+});

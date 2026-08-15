@@ -67,7 +67,7 @@ test("standard servicer feed validates provenance and detects a missed heartbeat
   const feed = parseServicerFeed({
     schema: "duevia.servicer-feed/v1",
     signature: "ed25519:demo-signature",
-    snapshot: { poolId: "POOL-1", capturedAt: "2026-08-11T12:00:00.000Z", heartbeat: "healthy", source: "servicer-api" },
+    snapshot: { poolId: "POOL-1", capturedAt: "2026-08-11T12:00:00.000Z", heartbeat: "healthy", tokenSupply: 90000, source: "servicer-api" },
     assets: [{ assetId: "AR-1", invoiceId: "INV-1", documentHash: "sha256:abc" }],
     payments: [{ paymentId: "PAY-1", invoiceId: "INV-1" }],
   });
@@ -75,4 +75,14 @@ test("standard servicer feed validates provenance and detects a missed heartbeat
   const status = servicerFeedStatus(feed, "2026-08-14T12:00:00.000Z");
   assert.equal(status.stale, true);
   assert.equal(Math.round(status.ageHours), 72);
+});
+
+test("servicer feed requires represented token supply independently of asset balances", () => {
+  assert.throws(() => parseServicerFeed({
+    schema: "duevia.servicer-feed/v1",
+    signature: "hmac-sha256:demo",
+    snapshot: { poolId: "POOL-1", capturedAt: "2026-08-16T00:00:00.000Z", heartbeat: "healthy", source: "servicer-api" },
+    assets: [{ assetId: "AR-1", invoiceId: "INV-1", documentHash: "sha256:abc", outstanding: 100000 }],
+    payments: [],
+  }), /tokenSupply/);
 });

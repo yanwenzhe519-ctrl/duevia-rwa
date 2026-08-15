@@ -7,6 +7,7 @@ import { analyzeCase, canonicalizeReport } from "@/lib/risk-engine.mjs";
 import { demoCase } from "@/lib/demo-case.mjs";
 import { dueviaRegistryAbi, dueviaRegistryBytecode } from "@/lib/duevia-registry-artifact";
 import { dueviaGuardAbi, dueviaGuardBytecode } from "@/lib/duevia-guard-artifact";
+import { dueviaPoolAbi, dueviaPoolBytecode } from "@/lib/duevia-pool-artifact";
 import { analyzePortfolio, parseAssetTapeCsv, parsePaymentsCsv } from "@/lib/portfolio-engine.mjs";
 import { portfolioDemo } from "@/lib/portfolio-demo.mjs";
 import AiInvestigator from "./ai-investigator";
@@ -36,6 +37,7 @@ const zeroHash = `0x${"0".repeat(64)}` as Hex;
 const create2Factory = "0x4e59b44847b379578588920cA78FbF26c0B4956C" as Address;
 const registrySalt = `0x8b9d4d76a3f2e1c0b7a6958473625140fedcba98765432100123456789abcdef` as Hex;
 const guardSalt = `0x4d554152445f47554152445f56315f585f4c415945525f544553544e45540000` as Hex;
+const poolSalt = `0x4455455649415f504f4f4c5f56315f585f4c415945525f544553544e45540000` as Hex;
 const suspendedAttestationId = "0x50cdc9c0013f005e30d4d6d29cc6ff95c0021598da8a363b8d53fbe829fd2a7c" as Hex;
 const verifiedAttestationId = "0xdfafed8dbcf51e3f70f31217c1d3adbc5ddf99c2c3f2430d66f8cbf3018c1cfd" as Hex;
 
@@ -64,6 +66,9 @@ export default function DueviaWorkspace() {
   const [guardAddress, setGuardAddress] = useState("");
   const [guardDeploying, setGuardDeploying] = useState(false);
   const [guardNotice, setGuardNotice] = useState("");
+  const [poolAddress, setPoolAddress] = useState("");
+  const [poolDeploying, setPoolDeploying] = useState(false);
+  const [poolNotice, setPoolNotice] = useState("");
   const [notice, setNotice] = useState("Workspace ready · private evidence stays in this browser");
   const fileInput = useRef<HTMLInputElement>(null);
   const portfolioFileInput = useRef<HTMLInputElement>(null);
@@ -91,6 +96,12 @@ export default function DueviaWorkspace() {
     const saved = window.localStorage.getItem("duevia-testnet-guard");
     // eslint-disable-next-line react-hooks/set-state-in-effect
     if (saved && isAddress(saved)) setGuardAddress(saved);
+  }, []);
+
+  useEffect(() => {
+    const saved = window.localStorage.getItem("duevia-testnet-pool");
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (saved && isAddress(saved)) setPoolAddress(saved);
   }, []);
 
   const runVerification = async () => {
@@ -268,6 +279,56 @@ export default function DueviaWorkspace() {
     }
   };
 
+  const deployPool = async () => {
+    if (!window.ethereum || !wallet || !guardAddress || !isAddress(guardAddress)) {
+      setPoolNotice("Deploy the Eligibility Guard and connect the wallet first.");
+      return;
+    }
+    try {
+      setPoolDeploying(true);
+      setPoolNotice("Preparing the value-bearing receivables pool deployment…");
+      const initCode = encodeDeployData({ abi: dueviaPoolAbi, bytecode: dueviaPoolBytecode, args: [guardAddress as Address] });
+      const predicted = getCreate2Address({ from: create2Factory, salt: poolSalt, bytecodeHash: keccak256(initCode) });
+      const publicClient = createPublicClient({ chain: xLayerTestnet, transport: http("https://testrpc.xlayer.tech") });
+      const existing = await publicClient.getBytecode({ address: predicted });
+      if (!existing || existing === "0x") {
+        const client = createWalletClient({ chain: xLayerTestnet, transport: custom(window.ethereum) });
+        const hash = await client.sendTransaction({ account: wallet as Address, to: create2Factory, data: `${poolSalt}${initCode.slice(2)}` as Hex });
+        setPoolNotice("Pool deployment submitted. Waiting for X Layer confirmation…");
+        await publicClient.waitForTransactionReceipt({ hash });
+      }
+      const code = await publicClient.getBytecode({ address: predicted });
+      if (!code || code === "0x") throw new Error("No pool code at predicted address");
+      setPoolAddress(predicted);
+      window.localStorage.setItem("duevia-testnet-pool", predicted);
+      setPoolNotice(`Receivables pool ready: ${shortAddress(predicted)}.`);
+    } catch (error) {
+      setPoolNotice(`Pool deployment failed: ${(error instanceof Error ? error.message : String(error)).slice(0, 160)}`);
+    } finally {
+      setPoolDeploying(false);
+    }
+  };
+
+  const testPool = async () => {
+    if (!window.ethereum || !wallet || !poolAddress || !isAddress(poolAddress)) return;
+    try {
+      const publicClient = createPublicClient({ chain: xLayerTestnet, transport: http("https://testrpc.xlayer.tech") });
+      let suspendedBlocked = false;
+      try {
+        await publicClient.simulateContract({ account: wallet as Address, address: poolAddress as Address, abi: dueviaPoolAbi, functionName: "deposit", args: [suspendedAttestationId], value: BigInt(1) });
+      } catch { suspendedBlocked = true; }
+      if (!suspendedBlocked) throw new Error("SUSPENDED deposit unexpectedly succeeded");
+      setPoolNotice("SUSPENDED deposit reverted. Requesting 1 wei VERIFIED deposit confirmation…");
+      const client = createWalletClient({ chain: xLayerTestnet, transport: custom(window.ethereum) });
+      const hash = await client.sendTransaction({ account: wallet as Address, to: poolAddress as Address, value: BigInt(1), data: encodeFunctionData({ abi: dueviaPoolAbi, functionName: "deposit", args: [verifiedAttestationId] }) });
+      await publicClient.waitForTransactionReceipt({ hash });
+      const total = await publicClient.readContract({ address: poolAddress as Address, abi: dueviaPoolAbi, functionName: "totalDeposited" });
+      setPoolNotice(`SUSPENDED blocked; VERIFIED deposited 1 wei. Pool total: ${String(total)} wei · tx ${shortAddress(hash)}.`);
+    } catch (error) {
+      setPoolNotice(`Pool control test failed: ${(error instanceof Error ? error.message : String(error)).slice(0, 160)}`);
+    }
+  };
+
   const publishAttestation = async () => {
     if (!window.ethereum || !wallet || !registryAddress || !proofHash || !isAddress(registryAddress)) return;
     try {
@@ -388,24 +449,23 @@ export default function DueviaWorkspace() {
     }
   };
 
-  const publishContinuityState = async () => {
+  const publishContinuityState = async (status: 1 | 4, previousAttestation: Hex = zeroHash) => {
     if (!window.ethereum || !wallet || !registryAddress || !isAddress(registryAddress)) throw new Error("Wallet and registry required");
     const assetId = keccak256(stringToHex("duevia:pool:continuity-demo"));
-    const recoveryRoot = keccak256(stringToHex("duevia:recovery:servicer-offline:v1:18-assets:3-payments"));
-    const attestationId = keccak256(stringToHex(`duevia:continuity:${Date.now()}`));
+    const evidenceRoot = await fingerprint({ status: status === 4 ? "suspended" : "verified", predecessor: previousAttestation, portfolio: portfolioReport });
+    const attestationId = keccak256(stringToHex(`duevia:continuity:${status}:${evidenceRoot}:${Date.now()}`));
     const policyHash = keccak256(stringToHex("DUEVIA_CONTINUITY_FAILOVER_V1"));
     const validUntil = BigInt(Math.floor((Date.now() + 7 * 86_400_000) / 1000));
     const data = encodeFunctionData({
       abi: dueviaRegistryAbi,
       functionName: "publishAttestation",
-      // A servicer outage must publish a real SUSPENDED state before any
-      // successor authorization can proceed.
-      args: [assetId, attestationId, recoveryRoot, policyHash, zeroHash, validUntil, 88, 4],
+      args: [assetId, attestationId, evidenceRoot as Hex, policyHash, previousAttestation, validUntil, status === 4 ? 0 : 92, status],
     });
     const client = createWalletClient({ chain: xLayerTestnet, transport: custom(window.ethereum) });
     const hash = await client.sendTransaction({ account: wallet as Address, to: registryAddress as Address, data });
     setAnchorTx(hash);
-    setNotice(`Continuity recovery attestation submitted to X Layer Testnet: ${shortAddress(hash)}`);
+    setNotice(`Continuity ${status === 4 ? "SUSPENDED" : "VERIFIED"} attestation submitted: ${shortAddress(hash)}`);
+    return attestationId;
   };
 
   const validUntil = report.validUntil ? new Date(report.validUntil).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" }) : "Not set";
@@ -423,7 +483,7 @@ export default function DueviaWorkspace() {
       <header className="app-topbar"><div><span>ASSET / {report.caseId}</span><h1>{report.assetName}</h1></div><div className="app-actions"><button className="ghost-action" type="button" onClick={downloadReport}>Export attestation</button><button className="wallet-action" type="button" onClick={connectWallet}>{wallet ? shortAddress(wallet) : "Connect wallet"}</button></div></header>
       <nav className="workspace-tabs" aria-label="Asset views">{tabs.map((item) => <button key={item} type="button" className={tab === item ? "active" : ""} onClick={() => setTab(item)}>{item}</button>)}</nav>
       <div className="app-content">
-        {tab === "Continuity Agent" && <ContinuityAgent onPublishState={publishContinuityState} />}
+        {tab === "Continuity Agent" && <ContinuityAgent onPublishSuspended={() => publishContinuityState(4)} onPublishVerified={(previous) => publishContinuityState(1, previous as Hex)} />}
         {tab === "AI Investigator" && <AiInvestigator report={portfolioReport} sourceName={portfolioSource} onOpenPortfolio={() => setTab("Portfolio controls")} />}
         {tab === "Portfolio controls" && <section className="portfolio-view">
           <div className="detail-heading portfolio-heading"><div><span>POLICY & EXECUTION</span><h2>{portfolioReport.poolName}</h2><p>The AI investigation layer resolves signals here into transparent eligibility controls and an executable pool state.</p></div><button className="ghost-action" type="button" onClick={() => setTab("AI Investigator")}>← Back to AI Investigator</button></div>
@@ -453,7 +513,7 @@ export default function DueviaWorkspace() {
           <section className="verification-toolbar"><div className="evidence-source"><span>Evidence package</span><b>{uploadedName}</b><small>Local processing · raw evidence is not written onchain</small></div><input ref={fileInput} hidden type="file" accept="application/json,.json" onChange={(event) => event.target.files?.[0] && loadEvidencePackage(event.target.files[0])} /><button className="upload-package" type="button" onClick={() => loadBuiltInScenario(true)}>Load eligible sample</button><button className="run-check" type="button" onClick={runVerification} disabled={running}>{running ? "Evaluating policy…" : "Run assurance policy"}<span>→</span></button></section>
           <div className="status-line"><i className={running ? "scanning" : ""} /><span>{notice}</span></div>
           <section className="module-workspace"><div className="module-panel"><div className="module-panel-head"><div><span>CONTROL {String(report.modules.findIndex((module) => module.id === selected.id) + 1).padStart(2, "0")}</span><h3>{selected.name}</h3><p>{selected.summary}</p></div><div className={`module-score ${selected.status}`}><strong>{selected.score}</strong><span>/100</span></div></div><div className="finding-stack">{selected.findings.length ? selected.findings.map((item) => <article key={`${item.code}-${item.title}`} className={`finding-card ${item.severity}`}><div className="finding-top"><span>{item.severity}</span><code>{item.code}</code></div><h4>{item.title}</h4><p>{item.explanation}</p>{item.evidence?.length > 0 && <div className="evidence-links">{item.evidence.map((evidence) => <button type="button" key={evidence}>↗ {evidence}</button>)}</div>}</article>) : <div className="no-findings">No material exceptions detected in this control.</div>}</div></div>
-          <aside className="proof-panel"><span className="proof-label">ASSET ATTESTATION</span><h3>Private evidence. Public status.</h3><p>Duevia publishes a fingerprint, policy, status, and validity window to X Layer—not raw commercial data.</p><div className="hash-box"><span>ATTESTATION FINGERPRINT</span><code>{proofHash || "Run assurance policy to generate"}</code></div><dl><div><dt>Assurance</dt><dd>{report.assuranceLevel}</dd></div><div><dt>Policy</dt><dd>{report.policyId}</dd></div><div><dt>Valid until</dt><dd>{validUntil}</dd></div><div><dt>Network</dt><dd>X Layer Testnet</dd></div></dl>{!registryAddress && <button className="upload-package deploy-button" type="button" onClick={deployRegistry} disabled={!wallet || deploying}>{deploying ? "Deploying registry…" : !wallet ? "Connect wallet to deploy" : "Deploy Duevia testnet registry"}</button>}<button className="anchor-button" type="button" onClick={publishAttestation} disabled={!proofHash || !wallet || !registryAddress || !isAddress(registryAddress)}>{!registryAddress ? "Deploy registry first" : !wallet ? "Connect wallet to attest" : "Publish attestation on X Layer"}</button>{anchorTx && <a className="proof-note" href={`https://www.oklink.com/x-layer-testnet/tx/${anchorTx}`} target="_blank" rel="noreferrer">View testnet transaction ↗</a>}<small className="proof-note">{registryAddress ? `Registry: ${shortAddress(registryAddress)} · stored only in this browser` : "Deploy a personal testnet registry from this browser. Testnet OKB is required."}</small><div className="guard-panel"><span className="proof-label">POOL ELIGIBILITY GUARD</span><h3>Block unsafe capital flows.</h3><p>Minimum score 80. The guard must reject the suspended attestation and allow the verified successor state.</p>{!guardAddress ? <button className="upload-package deploy-button" type="button" onClick={deployGuard} disabled={!wallet || !registryAddress || guardDeploying}>{guardDeploying ? "Deploying guard…" : "Deploy Eligibility Guard"}</button> : <button className="anchor-button" type="button" onClick={testGuard} disabled={!wallet}>Test SUSPENDED block + VERIFIED release</button>}<small className="proof-note">{guardNotice || (guardAddress ? `Guard: ${shortAddress(guardAddress)}` : "Guard not deployed")}</small></div></aside></section>
+          <aside className="proof-panel"><span className="proof-label">ASSET ATTESTATION</span><h3>Private evidence. Public status.</h3><p>Duevia publishes a fingerprint, policy, status, and validity window to X Layer—not raw commercial data.</p><div className="hash-box"><span>ATTESTATION FINGERPRINT</span><code>{proofHash || "Run assurance policy to generate"}</code></div><dl><div><dt>Assurance</dt><dd>{report.assuranceLevel}</dd></div><div><dt>Policy</dt><dd>{report.policyId}</dd></div><div><dt>Valid until</dt><dd>{validUntil}</dd></div><div><dt>Network</dt><dd>X Layer Testnet</dd></div></dl>{!registryAddress && <button className="upload-package deploy-button" type="button" onClick={deployRegistry} disabled={!wallet || deploying}>{deploying ? "Deploying registry…" : !wallet ? "Connect wallet to deploy" : "Deploy Duevia testnet registry"}</button>}<button className="anchor-button" type="button" onClick={publishAttestation} disabled={!proofHash || !wallet || !registryAddress || !isAddress(registryAddress)}>{!registryAddress ? "Deploy registry first" : !wallet ? "Connect wallet to attest" : "Publish attestation on X Layer"}</button>{anchorTx && <a className="proof-note" href={`https://www.oklink.com/x-layer-testnet/tx/${anchorTx}`} target="_blank" rel="noreferrer">View testnet transaction ↗</a>}<small className="proof-note">{registryAddress ? `Registry: ${shortAddress(registryAddress)} · stored only in this browser` : "Deploy a personal testnet registry from this browser. Testnet OKB is required."}</small><div className="guard-panel"><span className="proof-label">POOL ELIGIBILITY GUARD</span><h3>Block unsafe capital flows.</h3><p>Minimum score 80. The guard must reject the suspended attestation and allow the verified successor state.</p>{!guardAddress ? <button className="upload-package deploy-button" type="button" onClick={deployGuard} disabled={!wallet || !registryAddress || guardDeploying}>{guardDeploying ? "Deploying guard…" : "Deploy Eligibility Guard"}</button> : <button className="anchor-button" type="button" onClick={testGuard} disabled={!wallet}>Test guard decision</button>}<small className="proof-note">{guardNotice || (guardAddress ? `Guard: ${shortAddress(guardAddress)}` : "Guard not deployed")}</small></div><div className="guard-panel"><span className="proof-label">VALUE-BEARING POOL</span><h3>Enforce before funds move.</h3><p>The pool accepts native testnet OKB only when the referenced attestation is currently VERIFIED.</p>{!poolAddress ? <button className="upload-package deploy-button" type="button" onClick={deployPool} disabled={!wallet || !guardAddress || poolDeploying}>{poolDeploying ? "Deploying pool…" : "Deploy Receivables Pool"}</button> : <button className="anchor-button" type="button" onClick={testPool} disabled={!wallet}>Test blocked + allowed deposit</button>}<small className="proof-note">{poolNotice || (poolAddress ? `Pool: ${shortAddress(poolAddress)}` : "Pool not deployed")}</small></div></aside></section>
         </>}
         {tab === "Asset passport" && <section className="detail-view"><div className="detail-heading"><div><span>ASSET PASSPORT</span><h2>Portable assurance profile</h2><p>A decision-ready status for issuers, allocators, and integrated contracts.</p></div><span className={`status-pill ${report.status}`}>{statusLabel[report.status]}</span></div><div className="passport-grid"><div><span>Asset type</span><strong>{String(caseData.asset.type ?? "Trade receivable")}</strong></div><div><span>Reported value</span><strong>{Number(caseData.asset.reportedValue ?? 0).toLocaleString()} USDT</strong></div><div><span>Issuer</span><strong>{String((caseData.issuer as Record<string, unknown>)?.legalName ?? "Unknown")}</strong></div><div><span>Assurance level</span><strong>{report.assuranceLevel}</strong></div><div><span>Policy</span><strong>{report.policyId}</strong></div><div><span>Valid until</span><strong>{validUntil}</strong></div></div><div className="passport-callout"><b>Decision rationale</b><p>{report.disclaimer}</p></div></section>}
         {tab === "Monitoring" && <section className="detail-view"><div className="detail-heading"><div><span>CONTINUOUS CONTROLS</span><h2>Monitoring</h2><p>Evidence should be refreshed before it silently becomes unreliable.</p></div><span className="live-badge"><i /> Policy cadence: daily</span></div><div className="monitor-grid"><div className="monitor-card"><span>Validity window</span><strong>{report.validUntil ? "Active" : "Unset"}</strong><small>{validUntil}</small></div><div className="monitor-card amber-card"><span>Open alerts</span><strong>{report.counts.high + report.counts.medium}</strong><small>Require analyst attention</small></div><div className="monitor-card"><span>Evidence status</span><strong>{report.status === "verified" ? "Current" : "Review"}</strong><small>Based on the current evidence package</small></div></div><div className="timeline-list"><div><b>Now</b><span>Assurance decision generated</span><em>{report.assuranceLevel}</em></div><div><b>Pending</b><span>Payment beneficiary confirmation</span><em>Owner: issuer</em></div><div><b>At expiry</b><span>Registry should move state to stale and block automatic eligibility</span><em>{validUntil}</em></div></div></section>}

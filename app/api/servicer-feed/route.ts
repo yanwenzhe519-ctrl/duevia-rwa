@@ -45,10 +45,10 @@ export async function POST(request: Request) {
     const report = analyzePortfolio({
       poolId: feed.snapshot.poolId,
       poolName: `Servicer pool ${feed.snapshot.poolId}`,
-      asOf: feed.snapshot.capturedAt,
+      asOf: new Date().toISOString(),
       assets: feed.assets,
       payments: feed.payments,
-      tokenSupply: feed.assets.reduce((sum, asset) => sum + Number(asset.outstanding || 0), 0),
+      tokenSupply: feed.snapshot.tokenSupply,
     });
     const context = sanitizedContext(feed, report, status);
     let ai: { answer?: string; mode: string } = { mode: "grounded-fallback" };

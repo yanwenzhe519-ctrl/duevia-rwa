@@ -5,6 +5,7 @@
     "poolId": "POOL-REAL-001",
     "capturedAt": "2026-08-16T00:00:00.000Z",
     "heartbeat": "healthy",
+    "tokenSupply": 90000,
     "source": "servicer-api"
   },
   "assets": [

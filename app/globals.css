@@ -337,8 +337,8 @@ a { color: inherit; text-decoration: none; }
 .continuity-actions { margin-top: 18px; padding: 22px; display: flex; align-items: center; justify-content: space-between; gap: 20px; border: 1px solid var(--line); background: var(--white); }
 .continuity-actions h3 { margin: 8px 0 5px; font-size: 23px; letter-spacing: -.04em; }
 .continuity-actions p { margin: 0; color: var(--muted); font-size: 10px; line-height: 1.5; }
-.continuity-buttons { display: flex; gap: 8px; flex-shrink: 0; }
-.continuity-buttons button { min-width: 205px; }
+.continuity-buttons { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; flex-shrink: 0; max-width: 660px; }
+.continuity-buttons button { min-width: 150px; }
 .continuity-grid { margin-top: 18px; display: grid; grid-template-columns: 1.25fr .75fr; gap: 18px; align-items: start; }
 .continuity-events, .recovery-panel { border: 1px solid var(--line); background: var(--white); }
 .event-list { padding: 10px 18px 18px; }

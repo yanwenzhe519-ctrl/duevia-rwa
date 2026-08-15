@@ -12,6 +12,7 @@ Duevia RWA is asset assurance infrastructure for tokenized private markets. It t
 - An assurance level, policy ID, validity window, exception list, and exportable attestation.
 - Wallet connection to X Layer Testnet (chain ID `1952`).
 - A contract design in which an asset must have a valid Duevia attestation before an integrated pool or mint flow can accept it.
+- A value-bearing receivables pool whose native-token deposits revert unless the referenced attestation is currently eligible.
 
 ## Product surfaces
 
@@ -28,7 +29,9 @@ The canonical adapter boundary is `duevia.servicer-feed/v1`: a signed snapshot e
 
 `contracts/DueviaEligibilityGuard.sol` shows how an issuance, pool, or market contract can require a current verified Duevia attestation before accepting an asset.
 
-The guard's `executeIfEligible` hook reverts with `AssetNotEligible` for suspended, expired, missing, or below-threshold attestations. This is the enforcement boundary: AI can propose a recovery state, but it cannot bypass the registry or mint path.
+`contracts/DueviaReceivablesPool.sol` is the executable integration proof. Its payable `deposit` calls the guard before accepting testnet OKB, while withdrawals remain available to depositors. This demonstrates capital-flow enforcement rather than a UI-only eligibility signal.
+
+The guard reverts with `AssetNotEligible` for suspended, expired, missing, or below-threshold attestations. This is the enforcement boundary: AI can propose a recovery state, but it cannot bypass the registry or pool path. Continuity recovery uses two linked attestations: first `SUSPENDED`, then a successor `VERIFIED` attestation whose `previousAttestation` points to the suspension record.
 
 Set `NEXT_PUBLIC_DUEVIA_REGISTRY_ADDRESS` after deploying the registry to enable live attestation publishing in the DApp.
 
@@ -54,7 +57,7 @@ The `/api/agent` endpoint validates and bounds input, disables provider-side sto
 
 ### Connecting a real servicer source
 
-Use an API webhook, SFTP/S3 export, or ERP/bank connector that produces the canonical `duevia.servicer-feed/v1` envelope. The server endpoint `POST /api/servicer-feed` is the trust boundary: it validates the schema, verifies an `hmac-sha256:` signature, enforces the heartbeat freshness window, runs the deterministic portfolio policy, and sends only aggregate, privacy-preserving context to the AI connector. AI output is explanatory and proposes recovery actions; it cannot change the policy state or authorize an onchain operation.
+Use an API webhook, SFTP/S3 export, or ERP/bank connector that produces the canonical `duevia.servicer-feed/v1` envelope. The snapshot includes represented `tokenSupply` independently from asset balances so eligible-coverage checks cannot become true by construction. The server endpoint `POST /api/servicer-feed` is the trust boundary: it validates the schema, verifies an `hmac-sha256:` signature, enforces the heartbeat freshness window, runs the deterministic portfolio policy, and sends only aggregate, privacy-preserving context to the AI connector. The DApp can load a signed feed through the Continuity Agent. AI output is explanatory and proposes recovery actions; it cannot change the policy state or authorize an onchain operation.
 
 Configure a server-only secret (never `NEXT_PUBLIC_*`):
 
