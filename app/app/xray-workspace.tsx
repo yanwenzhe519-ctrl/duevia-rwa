@@ -121,7 +121,10 @@ export default function DueviaWorkspace() {
       setDeploying(true);
       setNotice("Requesting wallet approval to deploy the Duevia testnet registry...");
       const walletClient = createWalletClient({ chain: xLayerTestnet, transport: custom(window.ethereum) });
-      const hash = await walletClient.deployContract({ account: wallet as Address, abi: dueviaRegistryAbi, bytecode: dueviaRegistryBytecode });
+      // Some injected wallets reject viem's deployContract wrapper even though
+      // they support the underlying contract-creation transaction. Sending the
+      // init bytecode directly keeps the request EIP-1193-compatible.
+      const hash = await walletClient.sendTransaction({ account: wallet as Address, data: dueviaRegistryBytecode });
       setNotice("Registry transaction submitted. Waiting for X Layer Testnet confirmation...");
       const publicClient = createPublicClient({ chain: xLayerTestnet, transport: http("https://testrpc.xlayer.tech") });
       const receipt = await publicClient.waitForTransactionReceipt({ hash });
