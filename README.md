@@ -58,6 +58,10 @@ The DApp can deploy a personal `DueviaAssetAssuranceRegistry` from the **Deploy 
 
 For production, use a separately reviewed deployment process and a multisig/role-managed attestor. The included registry is an MVP reference contract and has not undergone an independent security audit.
 
+### Wallet identity
+
+All DApp deployments and attestations use the wallet currently connected through `window.ethereum`. The application does not contain a project wallet address, private key, or fallback signer. Keep one browser wallet account selected for the testnet and later mainnet run; the Agentic Wallet CLI account is separate and is not used by the DApp.
+
 X Layer Testnet configuration:
 
 - Chain ID: `1952` (`0x7a0`)
