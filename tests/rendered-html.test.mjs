@@ -18,8 +18,19 @@ test("the public site uses Duevia RWA agentic investigation messaging", async ()
   assert.match(agent, /AI proposes/);
   assert.match(route, /OPENAI_API_KEY/);
   assert.match(route, /store: false/);
+  assert.match(route, /AbortController/);
+  assert.match(route, /Request body must be valid JSON/);
+  assert.match(route, /Cache-Control.*no-store/);
   assert.match(layout, /Duevia RWA/);
   assert.doesNotMatch(page, /ProofFlow|Starter Project|codex-preview/);
+});
+
+test("the agent route applies bounded, validated model input", async () => {
+  const route = await readFile(new URL("../app/api/agent/route.ts", import.meta.url), "utf8");
+  assert.match(route, /slice\(0, 2000\)/);
+  assert.match(route, /slice\(0, 30000\)/);
+  assert.match(route, /answer\.slice\(0, 12000\)/);
+  assert.match(route, /setTimeout\(\(\) => controller\.abort\(\), 15000\)/);
 });
 
 test("the temporary Sites skeleton is removed from the finished project", async () => {

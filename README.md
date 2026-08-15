@@ -28,6 +28,32 @@ The current browser demo accepts structured JSON so results stay deterministic a
 
 Set `NEXT_PUBLIC_DUEVIA_REGISTRY_ADDRESS` after deploying the registry to enable live attestation publishing in the DApp.
 
+## Local development
+
+Requirements: Node.js `22.13+` and a wallet that can switch to X Layer Testnet.
+
+```bash
+npm install
+npm run dev
+```
+
+The AI panel works without credentials using a deterministic, clearly-labelled fallback. To enable model-grounded recovery plans, configure the server environment (never expose these values as `NEXT_PUBLIC_*`):
+
+```bash
+OPENAI_API_KEY=...
+OPENAI_MODEL=gpt-5-mini
+# Optional OpenAI-compatible gateway:
+OPENAI_BASE_URL=https://api.openai.com/v1
+```
+
+The `/api/agent` endpoint validates and bounds input, disables provider-side storage, times out after 15 seconds, and returns a fallback status when the connector is unavailable. Raw borrower data should not be sent to it; pass only the structured evidence needed for the decision.
+
+## Testnet deployment
+
+The DApp can deploy a personal `DueviaAssetAssuranceRegistry` from the **Deploy Duevia registry** action. Obtain test OKB from the [X Layer faucet](https://web3.okx.com/xlayer/faucet), switch the wallet to chain `1952`, and keep the resulting registry address in the browser session or set `NEXT_PUBLIC_DUEVIA_REGISTRY_ADDRESS` for a shared environment. Verify deployment and attestations on [OKLink X Layer Testnet](https://www.oklink.com/x-layer-testnet).
+
+For production, use a separately reviewed deployment process and a multisig/role-managed attestor. The included registry is an MVP reference contract and has not undergone an independent security audit.
+
 X Layer Testnet configuration:
 
 - Chain ID: `1952` (`0x7a0`)
