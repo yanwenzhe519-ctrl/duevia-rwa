@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" role="img" aria-labelledby="title desc">
+  <title id="title">Introducing Duevia Continuity Agent</title>
+  <desc id="desc">Official Duevia product announcement in the black, white and blue brand system.</desc>
+  <rect width="1600" height="900" fill="#ffffff"/>
+  <g transform="translate(112 110)">
+    <path d="M0 0h300c196 0 356 160 356 356v312c0 64-52 116-116 116H0z" fill="#111111"/>
+    <path d="M160 236h82c83 0 150 67 150 150v119c-47-44-97-64-150-64-31 0-59 6-82 17z" fill="#ffffff"/>
+    <path d="M0 784c55-78 122-139 202-181 69-36 145-56 219-56 56 0 105 12 147 36-46 7-91 28-135 63-52 41-101 87-144 138z" fill="#ffffff"/>
+    <rect x="236" y="324" width="64" height="64" fill="#1769ff"/>
+  </g>
+  <g transform="translate(900 166)">
+    <text x="0" y="0" fill="#1769ff" font-family="Arial,sans-serif" font-size="22" font-weight="700" letter-spacing="5">DUEVIA</text>
+    <text x="0" y="105" fill="#111111" font-family="Arial,sans-serif" font-size="70" font-weight="700">Continuity</text>
+    <text x="0" y="184" fill="#111111" font-family="Arial,sans-serif" font-size="70" font-weight="700">Agent</text>
+    <rect x="0" y="232" width="80" height="8" fill="#1769ff"/>
+    <text x="0" y="310" fill="#333333" font-family="Arial,sans-serif" font-size="28">AI continuity infrastructure</text>
+    <text x="0" y="354" fill="#333333" font-family="Arial,sans-serif" font-size="28">for real-world assets.</text>
+    <text x="0" y="460" fill="#666666" font-family="Arial,sans-serif" font-size="20" letter-spacing="2">PRIVATE EVIDENCE  /  PUBLIC STATUS</text>
+    <text x="0" y="520" fill="#111111" font-family="Arial,sans-serif" font-size="24" font-weight="700">Built for X Layer</text>
+    <circle cx="272" cy="512" r="10" fill="#1769ff"/>
+  </g>
+  <path d="M112 836h1376" stroke="#111111" stroke-width="2"/>
+  <text x="112" y="870" fill="#111111" font-family="Arial,sans-serif" font-size="18" letter-spacing="3">DUEVIA  ·  AI + RWA  ·  X LAYER</text>
+</svg>

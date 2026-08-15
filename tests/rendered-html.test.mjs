@@ -44,3 +44,9 @@ test("the registry preserves private evidence and exposes eligibility", async ()
   assert.match(contract, /Raw evidence remains offchain/);
   assert.match(contract, /isEligible/);
 });
+
+test("the CREATE2 registry salt is exactly 32 bytes", async () => {
+  const workspace = await readFile(new URL("../app/app/xray-workspace.tsx", import.meta.url), "utf8");
+  const salt = workspace.match(/const registrySalt = `0x([0-9a-f]+)`/i)?.[1];
+  assert.equal(salt?.length, 64);
+});

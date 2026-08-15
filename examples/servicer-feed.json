@@ -1,0 +1,25 @@
+{
+  "schema": "duevia.servicer-feed/v1",
+  "signature": "hmac-sha256:replace-with-generated-signature",
+  "snapshot": {
+    "poolId": "POOL-REAL-001",
+    "capturedAt": "2026-08-16T00:00:00.000Z",
+    "heartbeat": "healthy",
+    "source": "servicer-api"
+  },
+  "assets": [
+    {
+      "assetId": "AR-001",
+      "invoiceId": "INV-001",
+      "originator": "Example Originator",
+      "debtor": "Example Debtor",
+      "faceValue": 100000,
+      "outstanding": 100000,
+      "dueDate": "2026-09-15",
+      "lastUpdatedAt": "2026-08-16T00:00:00.000Z",
+      "documentHash": "sha256:example-document-fingerprint",
+      "status": "open"
+    }
+  ],
+  "payments": []
+}

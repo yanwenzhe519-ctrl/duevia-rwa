@@ -52,6 +52,24 @@ OPENAI_BASE_URL=https://api.openai.com/v1
 
 The `/api/agent` endpoint validates and bounds input, disables provider-side storage, times out after 15 seconds, and returns a fallback status when the connector is unavailable. Raw borrower data should not be sent to it; pass only the structured evidence needed for the decision.
 
+### Connecting a real servicer source
+
+Use an API webhook, SFTP/S3 export, or ERP/bank connector that produces the canonical `duevia.servicer-feed/v1` envelope. The server endpoint `POST /api/servicer-feed` is the trust boundary: it validates the schema, verifies an `hmac-sha256:` signature, enforces the heartbeat freshness window, runs the deterministic portfolio policy, and sends only aggregate, privacy-preserving context to the AI connector. AI output is explanatory and proposes recovery actions; it cannot change the policy state or authorize an onchain operation.
+
+Configure a server-only secret (never `NEXT_PUBLIC_*`):
+
+```bash
+SERVICER_FEED_HMAC_SECRET=<random-32-byte-secret>
+```
+
+For an adapter or integration test, sign a feed before posting it:
+
+```bash
+node scripts/sign-servicer-feed.mjs examples/servicer-feed.json /tmp/servicer-feed.signed.json "$SERVICER_FEED_HMAC_SECRET"
+```
+
+Then send the signed JSON to `POST /api/servicer-feed`. The endpoint rejects a duplicate `(poolId, capturedAt, signature)` during the process lifetime; production deployments should replace this cache with durable nonce/replay storage shared by all instances. Keep raw evidence encrypted in the servicer's system, rotate signing keys, and use a dedicated attestor or multisig for the resulting X Layer attestation.
+
 ## Testnet deployment
 
 The DApp can deploy a personal `DueviaAssetAssuranceRegistry` from the **Deploy Duevia registry** action. Obtain test OKB from the [X Layer faucet](https://web3.okx.com/xlayer/faucet), switch the wallet to chain `1952`, and keep the resulting registry address in the browser session or set `NEXT_PUBLIC_DUEVIA_REGISTRY_ADDRESS` for a shared environment. Verify deployment and attestations on [OKLink X Layer Testnet](https://www.oklink.com/x-layer-testnet).
