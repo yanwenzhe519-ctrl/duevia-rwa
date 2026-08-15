@@ -12,6 +12,7 @@ contract DueviaEligibilityGuard {
     uint8 public immutable minimumScore;
 
     error AssetNotEligible();
+    event OperationAllowed(bytes32 indexed attestationId, address indexed caller);
 
     constructor(address registryAddress, uint8 minimumScore_) {
         registry = IDueviaAssetAssuranceRegistry(registryAddress);
@@ -20,5 +21,13 @@ contract DueviaEligibilityGuard {
 
     function requireEligible(bytes32 attestationId) external view {
         if (!registry.isEligible(attestationId, minimumScore)) revert AssetNotEligible();
+    }
+
+    /// @notice Example pool hook. Integrations should call this before minting,
+    /// depositing, or accepting an asset into a risk-bearing position.
+    function executeIfEligible(bytes32 attestationId, bytes calldata operation) external returns (bytes memory) {
+        if (!registry.isEligible(attestationId, minimumScore)) revert AssetNotEligible();
+        emit OperationAllowed(attestationId, msg.sender);
+        return operation;
     }
 }

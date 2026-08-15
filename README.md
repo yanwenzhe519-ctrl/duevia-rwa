@@ -20,11 +20,15 @@ Duevia RWA is asset assurance infrastructure for tokenized private markets. It t
 
 The current browser demo accepts structured JSON so results stay deterministic and no raw evidence is uploaded to a third party. PDF, CSV, accounting, banking, and registry connectors are deliberate next-stage inputs rather than simulated live integrations.
 
+The canonical adapter boundary is `duevia.servicer-feed/v1`: a signed snapshot envelope containing `poolId`, `capturedAt`, heartbeat state, asset rows, and payment rows. ERP, bank, and servicer adapters can normalize into this format while the same policy engine evaluates every source. See `lib/servicer-feed.mjs` for the validation contract.
+
 ## Onchain design
 
 `contracts/DueviaAssetAssuranceRegistry.sol` stores only the evidence fingerprint, policy fingerprint, score, status, validity window, and attestor. It supports authorized attestors, status changes, expiry checks, and an `isEligible` query.
 
 `contracts/DueviaEligibilityGuard.sol` shows how an issuance, pool, or market contract can require a current verified Duevia attestation before accepting an asset.
+
+The guard's `executeIfEligible` hook reverts with `AssetNotEligible` for suspended, expired, missing, or below-threshold attestations. This is the enforcement boundary: AI can propose a recovery state, but it cannot bypass the registry or mint path.
 
 Set `NEXT_PUBLIC_DUEVIA_REGISTRY_ADDRESS` after deploying the registry to enable live attestation publishing in the DApp.
 

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzePortfolio, parseAssetTapeCsv, parsePaymentsCsv } from "../lib/portfolio-engine.mjs";
 import { portfolioDemo } from "../lib/portfolio-demo.mjs";
+import { parseServicerFeed, servicerFeedStatus } from "../lib/servicer-feed.mjs";
 
 test("portfolio engine blocks duplicate financing and weak eligible coverage", () => {
   const report = analyzePortfolio(portfolioDemo);
@@ -42,4 +43,18 @@ test("payment ledger checks payer, beneficiary, and remaining balance", () => {
   assert.ok(report.alerts.some((alert) => alert.code === "PAYMENT_PARTY_MISMATCH"));
   assert.ok(report.alerts.some((alert) => alert.code === "CASHFLOW_BALANCE_MISMATCH"));
   assert.equal(report.state, "suspended");
+});
+
+test("standard servicer feed validates provenance and detects a missed heartbeat", () => {
+  const feed = parseServicerFeed({
+    schema: "duevia.servicer-feed/v1",
+    signature: "ed25519:demo-signature",
+    snapshot: { poolId: "POOL-1", capturedAt: "2026-08-11T12:00:00.000Z", heartbeat: "healthy", source: "servicer-api" },
+    assets: [{ assetId: "AR-1", invoiceId: "INV-1", documentHash: "sha256:abc" }],
+    payments: [{ paymentId: "PAY-1", invoiceId: "INV-1" }],
+  });
+  assert.equal(feed.schema, "duevia.servicer-feed/v1");
+  const status = servicerFeedStatus(feed, "2026-08-14T12:00:00.000Z");
+  assert.equal(status.stale, true);
+  assert.equal(Math.round(status.ageHours), 72);
 });
