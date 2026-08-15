@@ -33,10 +33,11 @@ contract DueviaAssetAssuranceRegistry {
     error InvalidScore();
     error InvalidValidityWindow();
 
-    constructor() {
-        owner = msg.sender;
-        authorizedAttestors[msg.sender] = true;
-        emit AttestorAuthorizationChanged(msg.sender, true);
+    constructor(address initialOwner) {
+        if (initialOwner == address(0)) revert NotOwner();
+        owner = initialOwner;
+        authorizedAttestors[initialOwner] = true;
+        emit AttestorAuthorizationChanged(initialOwner, true);
     }
 
     function setAttestor(address attestor, bool authorized) external {
