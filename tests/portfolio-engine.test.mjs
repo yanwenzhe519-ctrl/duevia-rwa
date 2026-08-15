@@ -45,6 +45,24 @@ test("payment ledger checks payer, beneficiary, and remaining balance", () => {
   assert.equal(report.state, "suspended");
 });
 
+test("payment CSV preserves quoted commas and blocks negative amounts", () => {
+  const payments = parsePaymentsCsv([
+    "paymentId,invoiceId,payer,beneficiaryAccount,amount,paidAt,source",
+    'PAY-1,INV-1,"Harbor, Logistics",ACCT-1,1000,2026-08-14,"Bank, statement"',
+  ].join("\n"));
+  assert.equal(payments[0].payer, "Harbor, Logistics");
+  assert.equal(payments[0].source, "Bank, statement");
+  const report = analyzePortfolio({
+    poolId: "POOL-NEG",
+    asOf: "2026-08-14T12:00:00.000Z",
+    tokenSupply: 1,
+    assets: [{ assetId: "AR-1", invoiceId: "INV-1", debtor: "Debtor", faceValue: 100, outstanding: 100, dueDate: "2026-09-30", bankAccount: "ACCT-1", lastUpdatedAt: "2026-08-14" }],
+    payments: [{ paymentId: "PAY-N", invoiceId: "INV-1", payer: "Debtor", beneficiaryAccount: "ACCT-1", amount: -50 }],
+  });
+  assert.ok(report.alerts.some((alert) => alert.code === "NEGATIVE_PAYMENT"));
+  assert.equal(report.metrics.reconciledCash, 0);
+});
+
 test("standard servicer feed validates provenance and detects a missed heartbeat", () => {
   const feed = parseServicerFeed({
     schema: "duevia.servicer-feed/v1",
