@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { createPublicClient, createWalletClient, custom, encodeFunctionData, http, isAddress, keccak256, stringToHex, type Address, type Hex } from "viem";
+import { createPublicClient, createWalletClient, custom, encodeFunctionData, getCreate2Address, http, isAddress, keccak256, stringToHex, type Address, type Hex } from "viem";
 import { analyzeCase, canonicalizeReport } from "@/lib/risk-engine.mjs";
 import { demoCase } from "@/lib/demo-case.mjs";
 import { dueviaRegistryAbi, dueviaRegistryBytecode } from "@/lib/duevia-registry-artifact";
@@ -32,6 +32,8 @@ const xLayerTestnet = {
   blockExplorers: { default: { name: "OKLink", url: "https://www.oklink.com/x-layer-testnet" } },
 } as const;
 const zeroHash = `0x${"0".repeat(64)}` as Hex;
+const create2Factory = "0x4e59b44847b379578588920cA78FbF26c0B4956C" as Address;
+const registrySalt = `0xf23fa0ede7f94935e0f1db21d69cacb5b69c3096d6f524c5c88546cb571514ca` as Hex;
 
 function shortAddress(value: string) { return `${value.slice(0, 6)}…${value.slice(-4)}`; }
 async function fingerprint(report: unknown) {
@@ -121,16 +123,22 @@ export default function DueviaWorkspace() {
       setDeploying(true);
       setNotice("Requesting wallet approval to deploy the Duevia testnet registry...");
       const walletClient = createWalletClient({ chain: xLayerTestnet, transport: custom(window.ethereum) });
-      // Some injected wallets reject viem's deployContract wrapper even though
-      // they support the underlying contract-creation transaction. Sending the
-      // init bytecode directly keeps the request EIP-1193-compatible.
-      const hash = await walletClient.sendTransaction({ account: wallet as Address, data: dueviaRegistryBytecode });
+      // Route deployment through the canonical CREATE2 factory. This is a
+      // normal contract call and is compatible with wallets that reject raw
+      // contract-creation requests or only sponsor contract calls.
+      const registryAddress = getCreate2Address({
+        from: create2Factory,
+        salt: registrySalt,
+        bytecodeHash: keccak256(dueviaRegistryBytecode),
+      });
+      const hash = await walletClient.sendTransaction({ account: wallet as Address, to: create2Factory, data: `${registrySalt}${dueviaRegistryBytecode.slice(2)}` as Hex });
       setNotice("Registry transaction submitted. Waiting for X Layer Testnet confirmation...");
       const publicClient = createPublicClient({ chain: xLayerTestnet, transport: http("https://testrpc.xlayer.tech") });
       const receipt = await publicClient.waitForTransactionReceipt({ hash });
-      if (!receipt.contractAddress) throw new Error("No contract address returned");
-      setDeployedRegistry(receipt.contractAddress);
-      window.localStorage.setItem("duevia-testnet-registry", receipt.contractAddress);
+      const deployedCode = await publicClient.getBytecode({ address: registryAddress });
+      if (!deployedCode || deployedCode === "0x") throw new Error("Registry deployment receipt confirmed but no code exists at the predicted address");
+      setDeployedRegistry(registryAddress);
+      window.localStorage.setItem("duevia-testnet-registry", registryAddress);
       setAnchorTx(hash);
       setNotice(`Testnet registry deployed: ${shortAddress(receipt.contractAddress)}. You are its first authorized attestor.`);
     } catch {
