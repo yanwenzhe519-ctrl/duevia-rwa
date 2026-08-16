@@ -19,7 +19,8 @@ contract DueviaRecoveryCoordinator {
         address successor;
     }
 
-    address public immutable owner;
+    address public owner;
+    address public pendingOwner;
     mapping(address => bool) public operators;
     mapping(bytes32 => Incident) private incidents;
 
@@ -30,6 +31,8 @@ contract DueviaRecoveryCoordinator {
     error UnknownIncident();
 
     event OperatorChanged(address indexed operator, bool enabled);
+    event OwnershipTransferStarted(address indexed currentOwner, address indexed pendingOwner);
+    event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
     event IncidentOpened(bytes32 indexed incidentId, bytes32 indexed poolId, bytes32 indexed servicerId, bytes32 previousAttestation, uint64 lastTrustedAt);
     event RecoveryRecorded(bytes32 indexed incidentId, bytes32 recoveryRoot, State state);
     event SuccessorProposed(bytes32 indexed incidentId, address indexed successor);
@@ -41,6 +44,21 @@ contract DueviaRecoveryCoordinator {
         owner = initialOwner;
         operators[initialOwner] = true;
         emit OperatorChanged(initialOwner, true);
+    }
+
+    function transferOwnership(address nextOwner) external {
+        if (msg.sender != owner || nextOwner == address(0)) revert NotOwner();
+        pendingOwner = nextOwner;
+        emit OwnershipTransferStarted(owner, nextOwner);
+    }
+
+    function acceptOwnership() external {
+        if (msg.sender != pendingOwner) revert NotOwner();
+        address previousOwner = owner;
+        owner = pendingOwner;
+        pendingOwner = address(0);
+        operators[owner] = true;
+        emit OwnershipTransferred(previousOwner, owner);
     }
 
     modifier onlyOperator() {
@@ -117,4 +135,3 @@ contract DueviaRecoveryCoordinator {
         return incidents[incidentId].state == State.Verified;
     }
 }
-

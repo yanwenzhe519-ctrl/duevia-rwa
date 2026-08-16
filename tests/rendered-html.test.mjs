@@ -69,6 +69,8 @@ test("recovery coordinator preserves the real-world failure lifecycle", async ()
   assert.match(contract, /function recordRecovery\(bytes32 incidentId, bytes32 recoveryRoot, State nextState\)/);
   assert.match(contract, /function verifySuccessor\(bytes32 incidentId, bytes32 successorAttestation\)/);
   assert.match(contract, /function isCapitalFlowAllowed\(bytes32 incidentId\) external view returns \(bool\)/);
+  assert.match(contract, /function transferOwnership\(address nextOwner\)/);
+  assert.match(contract, /function acceptOwnership\(\)/);
 });
 
 test("continuity guard and pool require asset and incident eligibility together", async () => {
