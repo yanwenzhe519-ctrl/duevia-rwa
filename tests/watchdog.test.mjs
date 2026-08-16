@@ -9,7 +9,7 @@ const base = { servicerId: "SERVICER-1", poolId: "POOL-1", lastHeartbeatAt: "202
 test("watchdog distinguishes healthy, grace, and outage states", () => {
   assert.equal(evaluateWatchdog(base, "2026-08-16T12:00:00.000Z").state, "HEALTHY");
   assert.equal(evaluateWatchdog(base, "2026-08-17T02:00:00.000Z").state, "DEGRADED");
-  const outage = evaluateWatchdog(base, "2026-08-17T07:00:00.000Z");
+  const outage = evaluateWatchdog({ ...base, signals: [{ type: "endpoint", source: "independent-observer", ok: false }] }, "2026-08-17T07:00:00.000Z");
   assert.equal(outage.state, "OUTAGE");
   assert.equal(outage.shouldSuspend, true);
   assert.match(outage.incidentId, /^duevia-[0-9a-f]{24}$/);

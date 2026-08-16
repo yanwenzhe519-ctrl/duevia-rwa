@@ -4,12 +4,12 @@
 
 - Project: Duevia Continuity Agent
 - Category: AI + RWA
-- Public DApp: `https://dueviarwa.cardrevive-agent.workers.dev/app`
+- Public DApp: `https://duevia-rwa.cardrevive-agent.workers.dev/app`
 - Network: X Layer Testnet, chain ID `1952`
 
 ## Why this is infrastructure
 
-Duevia is not a dashboard that asks a failed servicer for another upload. It is an X Layer continuity layer: independent observations trigger a deterministic incident state, the AI produces a `duevia.recovery-capsule/v1`, and a successor can only reopen capital flows after the recovery root and authorization are recorded. `DueviaRecoveryCoordinator` models `SUSPENDED`, `RECONSTRUCTED`, `REVIEW`, `RESTRUCTURING`, `VERIFIED`, and `CLOSED` so a default or servicing outage has an explicit onchain lifecycle.
+Duevia is not a dashboard that asks a failed servicer for another upload. It is an X Layer continuity layer: independent observations trigger a deterministic incident state, an event-sourced engine produces `duevia.recovery-capsule/v1`, and schema-constrained AI investigates and cites that evidence under an independent verifier. A successor can only reopen capital flows after the recovery root and authorization are recorded. `DueviaRecoveryCoordinator` models `SUSPENDED`, `RECONSTRUCTED`, `REVIEW`, `RESTRUCTURING`, `VERIFIED`, and `CLOSED` so a default or servicing outage has an explicit onchain lifecycle.
 
 Live infrastructure evidence:
 
@@ -20,6 +20,8 @@ Live infrastructure evidence:
 - Live model: Cloudflare Workers AI `@cf/meta/llama-3.3-70b-instruct-fp8-fast`
 - Public intelligence adapters: GDELT DOC 2.0 with Google News RSS fallback
 - External observer writes: allowlist, wallet signature, and nonce replay protection
+- False-positive controls: multi-source threshold, two consecutive ordinary outage runs, shadow mode, and fail-closed AI verification
+- Replay benchmark: `npm run bench:incidents` covers Maple/Orthogonal-style and Tugende-style synthetic incidents
 
 ## Existing onchain evidence
 
@@ -34,12 +36,12 @@ Live infrastructure evidence:
 
 ## Final evidence still requiring an authorized user action
 
-- Create and push the public GitHub repository.
-- Configure the production `OPENAI_API_KEY` and verify `/api/agent/health` reports `model-grounded`.
-- Deploy `DueviaReceivablesPool` from the connected project wallet. Completed at `0xe68b0c11cad7f756a536391ff3632e8956bbcc95`.
-- Execute the blocked SUSPENDED deposit simulation and confirmed VERIFIED 1 wei deposit. Completed; Pool `totalDeposited` is `1` wei.
-- Publish a linked SUSPENDED then VERIFIED continuity run using the same project wallet.
+- Deploy the latest `DueviaRecoveryCoordinator`, `DueviaContinuityGuard`, and `DueviaContinuityPool` from the connected project wallet.
+- Supply at least two additional independent owner/observer wallet addresses, then deploy and configure the recovery multisig and observer quorum.
+- Transfer Coordinator ownership to the multisig, authorize a funded Keeper role, and run a complete shadow rehearsal before enabling any automatic-suspension policy.
 - Redeploy the latest DApp and record a short end-to-end demo.
 - Publish the project X post mentioning `@XLayerOfficial` and submit the official form.
+
+Already complete: public GitHub repository, production Workers AI binding, five-minute Keeper, persistent D1 state, Registry/legacy Guard/Pool testnet proof, linked SUSPENDED and VERIFIED attestations, and the verified 1 wei Pool deposit.
 
 Do not submit private keys, seed phrases, API keys, raw borrower records, or unsigned screenshots as evidence.

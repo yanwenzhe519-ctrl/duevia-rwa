@@ -7,7 +7,7 @@ Duevia RWA is asset assurance infrastructure for tokenized private markets. It t
 - A trade-receivable case with evidence, entity, asset, policy, and monitoring controls.
 - A working CSV asset-tape importer with duplicate-financing, delinquency, data-freshness, eligible-coverage, and debtor-concentration controls.
 - A portfolio action queue that converts exceptions into transparent ALLOW, HOLD, or SUSPEND signals.
-- Deterministic rule checks alongside an AI-ready evidence intake layer.
+- Deterministic rule checks alongside schema-constrained AI investigation and an independent verifier.
 - An assurance outcome: `VERIFIED`, `MANUAL REVIEW`, or `SUSPENDED`.
 - An assurance level, policy ID, validity window, exception list, and exportable attestation.
 - Wallet connection to X Layer Testnet (chain ID `1952`).
@@ -25,7 +25,7 @@ Duevia RWA is asset assurance infrastructure for tokenized private markets. It t
 
 The current browser demo accepts structured JSON so results stay deterministic and no raw evidence is uploaded to a third party. PDF, CSV, accounting, banking, and registry connectors are deliberate next-stage inputs rather than simulated live integrations.
 
-The deployed Worker is no longer process-memory-only. `WATCHDOG_DB` stores scanner cursors, independent observations, incidents, registered projects, and Keeper history. A Cron trigger scans X Layer every five minutes. `GET /api/watchdog` exposes the public audit state, `GET /api/discovery` performs bounded RPC discovery, and `GET /api/intelligence?q=...` queries public reporting. External watchdog writes require either the private administrator token or an allowlisted observer-wallet signature with replay protection.
+The deployed Worker is no longer process-memory-only. `WATCHDOG_DB` stores scanner cursors, independent observations, incident evaluations, incidents, Recovery Capsules, AI investigations, execution approvals, and Keeper history. A Cron trigger scans X Layer every five minutes. A D1 lease prevents overlapping Keeper runs. `GET /api/watchdog` exposes redacted public audit metadata; evidence bodies, Capsule contents, snapshots, and execution payloads require administrator authorization. External watchdog writes require either the private administrator token or an allowlisted observer-wallet signature with replay protection.
 
 The canonical adapter boundary is `duevia.servicer-feed/v1`: a signed snapshot envelope containing `poolId`, `capturedAt`, heartbeat state, asset rows, and payment rows. ERP, bank, and servicer adapters can normalize into this format while the same policy engine evaluates every source. See `lib/servicer-feed.mjs` for the validation contract.
 
@@ -52,20 +52,19 @@ npm install
 npm run dev
 ```
 
-The public deployment uses Cloudflare Workers AI (`@cf/meta/llama-3.3-70b-instruct-fp8-fast`) through the server-side `AI` binding. Local development can still use an OpenAI-compatible connector by configuring the server environment (never expose these values as `NEXT_PUBLIC_*`):
+The public deployment uses Cloudflare Workers AI through the server-side `AI` binding: Llama 3.3 70B produces a JSON-Schema-constrained investigation and a separate Llama 3.1 8B model verifies evidence support. Malformed, uncited, or unverifiable output is persisted as `review-required` and cannot satisfy the execution policy.
 
 ### What recovery actually produces
 
 An outage is not considered recovered when an AI summary is displayed. `POST /api/reconstruct` produces a review-ready `duevia.recovery-capsule/v1` artifact with per-asset reconstructed balances, independently matched payments and chain/public observations, evidence references, conflict codes, confidence, required approvals, and a deterministic `recoveryRoot`. The UI displays this capsule before a successor attestation is authorized. Any conflict forces `REVIEW` and requires successor plus governance approval; no AI output can silently turn uncertain balances into eligible collateral.
 
-```bash
-OPENAI_API_KEY=...
-OPENAI_MODEL=gpt-5-mini
-# Optional OpenAI-compatible gateway:
-OPENAI_BASE_URL=https://api.openai.com/v1
-```
+The `/api/agent` endpoint validates and bounds input and fails closed when either model is unavailable. Raw borrower data should not be sent to it; pass only the structured evidence needed for the investigation.
 
-The `/api/agent` endpoint validates and bounds input, disables provider-side storage, times out after 15 seconds, and returns a fallback status when the connector is unavailable. Raw borrower data should not be sent to it; pass only the structured evidence needed for the decision.
+### Automatic suspension safety gates
+
+The Keeper cannot broadcast a `SUSPENDED` transaction. It may only create an `AWAITING_MULTISIG` action after two consecutive independently corroborated outage runs, shadow mode is disabled, the project explicitly enables automatic suspension, a Coordinator is configured, the AI investigation and verifier both pass, and the Recovery Root is valid. Broadcasting remains disabled until the Coordinator, observer quorum, multisig, keeper authorization, and gas policy are deployed and verified.
+
+Run the historical-pattern fault replays with `npm run bench:incidents`. The included Maple/Orthogonal-style and Tugende-style fixtures are synthetic scenarios derived from public failure patterns, not exact historical private ledgers or production accuracy claims.
 
 ## Autonomous infrastructure contracts
 

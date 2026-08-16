@@ -1,0 +1,22 @@
+{
+  "name": "Tugende-style restructured facility",
+  "servicerId": "TUGENDE-STYLE-BORROWER",
+  "poolId": "GOLDFINCH-STYLE-SENIOR-POOL",
+  "failureStartedAt": "2023-07-24T00:00:00.000Z",
+  "expectedOutstanding": 4500000,
+  "snapshot": {
+    "poolId": "GOLDFINCH-STYLE-SENIOR-POOL",
+    "source": "last-trusted-facility-ledger",
+    "capturedAt": "2023-07-23T00:00:00.000Z",
+    "currency": "USDC",
+    "decimals": 2,
+    "assets": [
+      { "assetId": "TUGENDE-FACILITY", "invoiceId": "TUG-01", "faceValue": 5000000, "outstanding": 5000000, "documentHash": "sha256:tugende-facility" }
+    ]
+  },
+  "timeline": [
+    { "at": "2023-07-23T12:00:00.000Z", "heartbeatAt": "2023-07-23T12:00:00.000Z", "signals": [] },
+    { "at": "2023-07-24T12:00:00.000Z", "signals": [{ "type": "redemption", "source": "payment-observer-a", "ok": false }] },
+    { "at": "2023-07-25T18:00:00.000Z", "signals": [{ "type": "redemption", "source": "payment-observer-a", "ok": false }, { "type": "redemption", "source": "payment-observer-b", "ok": false }], "payments": [{ "paymentId": "RECOVERY-1", "invoiceId": "TUG-01", "amount": 500000, "currency": "USDC", "paidAt": "2023-07-25T12:00:00.000Z", "source": "controlled-account" }], "chainEvents": [{ "eventId": "CHAIN-RECOVERY-1", "invoiceId": "TUG-01", "txHash": "0xtugenderecovery", "observedAt": "2023-07-25T12:05:00.000Z" }] }
+  ]
+}

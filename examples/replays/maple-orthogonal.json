@@ -1,0 +1,23 @@
+{
+  "name": "Maple / Orthogonal-style credit failure",
+  "servicerId": "ORTHOGONAL-STYLE-DELEGATE",
+  "poolId": "MAPLE-STYLE-USDC-POOL",
+  "failureStartedAt": "2022-12-03T00:00:00.000Z",
+  "expectedOutstanding": 36000000,
+  "snapshot": {
+    "poolId": "MAPLE-STYLE-USDC-POOL",
+    "source": "last-trusted-loan-ledger",
+    "capturedAt": "2022-12-02T00:00:00.000Z",
+    "currency": "USDC",
+    "decimals": 2,
+    "assets": [
+      { "assetId": "OT-LOAN-A", "invoiceId": "OT-A", "faceValue": 21000000, "outstanding": 21000000, "documentHash": "sha256:maple-a" },
+      { "assetId": "OT-LOAN-B", "invoiceId": "OT-B", "faceValue": 15000000, "outstanding": 15000000, "documentHash": "sha256:maple-b" }
+    ]
+  },
+  "timeline": [
+    { "at": "2022-12-02T12:00:00.000Z", "heartbeatAt": "2022-12-02T12:00:00.000Z", "signals": [] },
+    { "at": "2022-12-03T12:00:00.000Z", "signals": [{ "type": "endpoint", "source": "observer-a", "ok": false }] },
+    { "at": "2022-12-04T18:00:00.000Z", "signals": [{ "type": "endpoint", "source": "observer-a", "ok": false }, { "type": "endpoint", "source": "observer-b", "ok": false }] }
+  ]
+}
