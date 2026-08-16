@@ -63,6 +63,14 @@ test("continuity recovery requires linked suspended and verified attestations", 
   assert.match(continuity, /Publish successor VERIFIED/);
 });
 
+test("recovery coordinator preserves the real-world failure lifecycle", async () => {
+  const contract = await readFile(new URL("../contracts/DueviaRecoveryCoordinator.sol", import.meta.url), "utf8");
+  assert.match(contract, /enum State \{ None, Suspended, Reconstructed, Review, Restructuring, Verified, Closed \}/);
+  assert.match(contract, /function recordRecovery\(bytes32 incidentId, bytes32 recoveryRoot, State nextState\)/);
+  assert.match(contract, /function verifySuccessor\(bytes32 incidentId, bytes32 successorAttestation\)/);
+  assert.match(contract, /function isCapitalFlowAllowed\(bytes32 incidentId\) external view returns \(bool\)/);
+});
+
 test("the receivables pool gates real value-bearing deposits", async () => {
   const contract = await readFile(new URL("../contracts/DueviaReceivablesPool.sol", import.meta.url), "utf8");
   assert.match(contract, /function deposit\(bytes32 attestationId\) external payable/);

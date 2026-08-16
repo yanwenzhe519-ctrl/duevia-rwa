@@ -11,6 +11,8 @@ Duevia separates evidence ingestion, deterministic policy, AI explanation, and o
 7. `DueviaEligibilityGuard` reads `isEligible()` and reverts unsafe pool or issuance operations.
 8. `DueviaReceivablesPool` proves the enforcement boundary with payable testnet OKB deposits: suspended attestations revert, verified attestations accept value.
 
+`DueviaRecoveryCoordinator` adds the failure-management layer missing from ordinary attestation registries. It models `SUSPENDED -> RECONSTRUCTED/REVIEW/RESTRUCTURING -> VERIFIED -> CLOSED`, records the recovery capsule root, names an authorized successor, and exposes `isCapitalFlowAllowed(incidentId)`. This is based on recurring RWA incident mechanisms: stop new lending, preserve the last trusted state, run independent recovery/collection, require governance or successor approval, and only then restore eligibility.
+
 Continuity is a two-phase state transition. An outage first publishes `SUSPENDED`. A successor may later publish a new `VERIFIED` attestation linked through `previousAttestation`. The interface does not display `RESTORED` until the second transaction has been submitted successfully.
 
 The model never signs transactions, changes policy thresholds, or bypasses the guard. Raw borrower and payment records remain offchain.

@@ -7,6 +7,10 @@
 - Public DApp: `https://dueviarwa.cardrevive-agent.workers.dev/app`
 - Network: X Layer Testnet, chain ID `1952`
 
+## Why this is infrastructure
+
+Duevia is not a dashboard that asks a failed servicer for another upload. It is an X Layer continuity layer: independent observations trigger a deterministic incident state, the AI produces a `duevia.recovery-capsule/v1`, and a successor can only reopen capital flows after the recovery root and authorization are recorded. `DueviaRecoveryCoordinator` models `SUSPENDED`, `RECONSTRUCTED`, `REVIEW`, `RESTRUCTURING`, `VERIFIED`, and `CLOSED` so a default or servicing outage has an explicit onchain lifecycle.
+
 ## Existing onchain evidence
 
 - Registry: `0xaa747b92496f6c5f01b9a32d8108da797c85a8c2`

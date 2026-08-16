@@ -13,6 +13,7 @@ Duevia RWA is asset assurance infrastructure for tokenized private markets. It t
 - Wallet connection to X Layer Testnet (chain ID `1952`).
 - A contract design in which an asset must have a valid Duevia attestation before an integrated pool or mint flow can accept it.
 - A value-bearing receivables pool whose native-token deposits revert unless the referenced attestation is currently eligible.
+- A recovery coordinator state machine for real servicing failures: suspend, reconstruct, review/restructure, successor-verify, and close.
 
 ## Product surfaces
 
@@ -30,6 +31,8 @@ The canonical adapter boundary is `duevia.servicer-feed/v1`: a signed snapshot e
 `contracts/DueviaEligibilityGuard.sol` shows how an issuance, pool, or market contract can require a current verified Duevia attestation before accepting an asset.
 
 `contracts/DueviaReceivablesPool.sol` is the executable integration proof. Its payable `deposit` calls the guard before accepting testnet OKB, while withdrawals remain available to depositors. This demonstrates capital-flow enforcement rather than a UI-only eligibility signal.
+
+`contracts/DueviaRecoveryCoordinator.sol` is the infrastructure handoff layer. It is deliberately separate from the asset registry: the registry answers "is this attestation eligible?" while the coordinator answers "which incident lifecycle is this pool in, who is the successor, and has the recovery capsule been approved?" The coordinator is designed for the failure patterns documented in Maple/Orthogonal, Centrifuge/Harbor Trade, and Goldfinch/Tugende and Stratos: stop new capital, preserve evidence, pursue recovery or restructuring, and require an authorized handoff before reopening.
 
 The guard reverts with `AssetNotEligible` for suspended, expired, missing, or below-threshold attestations. This is the enforcement boundary: AI can propose a recovery state, but it cannot bypass the registry or pool path. Continuity recovery uses two linked attestations: first `SUSPENDED`, then a successor `VERIFIED` attestation whose `previousAttestation` points to the suspension record.
 
