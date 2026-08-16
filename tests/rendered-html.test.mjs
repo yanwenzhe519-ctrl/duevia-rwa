@@ -115,6 +115,9 @@ test("the deployment console enforces final governance and ownership handoff", a
   assert.match(deployer, /dueviaRecoveryMultisigBytecode/);
   assert.match(deployer, /dueviaObserverQuorumBytecode/);
   assert.match(deployer, /new Set\(normalized\)\.size === 3/);
+  assert.match(deployer, /const \[observers, setObservers\]/);
+  assert.match(deployer, /!governanceSet\.has/);
+  assert.match(deployer, /duevia-observer-addresses/);
   assert.match(deployer, /independenceConfirmed/);
   assert.match(deployer, /"transferOwnership"/);
   assert.match(deployer, /"acceptOwnership"/);

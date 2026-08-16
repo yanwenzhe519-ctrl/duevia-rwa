@@ -67,6 +67,7 @@ export default function InfrastructureDeployer({ wallet, registryAddress }: { wa
   const [multisig, setMultisig] = useState("");
   const [quorum, setQuorum] = useState("");
   const [governance, setGovernance] = useState([projectWallet, "", ""]);
+  const [observers, setObservers] = useState(["", "", ""]);
   const [independenceConfirmed, setIndependenceConfirmed] = useState(false);
   const [notice, setNotice] = useState("Deploy the final recovery stack with the authorized project wallet.");
   const [running, setRunning] = useState(false);
@@ -74,10 +75,17 @@ export default function InfrastructureDeployer({ wallet, registryAddress }: { wa
   const [runtime, setRuntime] = useState({ persistent: false, keeperRuns: 0, model: "checking", incidents: 0, capsules: 0, queuedActions: 0 });
 
   const validGovernance = useMemo(() => {
-    if (!independenceConfirmed || !governance.every((value) => isAddress(value))) return false;
+    if (!governance.every((value) => isAddress(value))) return false;
     const normalized = governance.map((value) => value.toLowerCase());
     return new Set(normalized).size === 3 && normalized.includes(projectWallet);
-  }, [governance, independenceConfirmed]);
+  }, [governance]);
+  const validObservers = useMemo(() => {
+    if (!observers.every((value) => isAddress(value))) return false;
+    const observerSet = new Set(observers.map((value) => value.toLowerCase()));
+    const governanceSet = new Set(governance.map((value) => value.toLowerCase()));
+    return observerSet.size === 3 && observers.every((value) => !governanceSet.has(value.toLowerCase()));
+  }, [governance, observers]);
+  const validConfiguration = independenceConfirmed && validGovernance && validObservers;
 
   useEffect(() => {
     // Restore browser-owned deployment state after hydration.
@@ -89,6 +97,8 @@ export default function InfrastructureDeployer({ wallet, registryAddress }: { wa
     setQuorum(localStorage.getItem("duevia-observer-quorum-v2") || "");
     const saved = JSON.parse(localStorage.getItem("duevia-governance-addresses") || "null") as unknown;
     if (Array.isArray(saved) && saved.length === 3 && saved.every((value) => typeof value === "string")) setGovernance(saved);
+    const savedObservers = JSON.parse(localStorage.getItem("duevia-observer-addresses") || "null") as unknown;
+    if (Array.isArray(savedObservers) && savedObservers.length === 3 && savedObservers.every((value) => typeof value === "string")) setObservers(savedObservers);
     Promise.all([fetch("/api/watchdog").then((response) => response.json()), fetch("/api/agent/health").then((response) => response.json()), fetch("/api/recovery").then((response) => response.json()), fetch("/api/execution").then((response) => response.json())]).then(([watchdog, ai, recovery, execution]) => setRuntime({ persistent: Boolean(watchdog.persistent), keeperRuns: Array.isArray(watchdog.keeperRuns) ? watchdog.keeperRuns.length : 0, model: ai.mode || "unavailable", incidents: Array.isArray(watchdog.incidents) ? watchdog.incidents.length : 0, capsules: Array.isArray(recovery.capsules) ? recovery.capsules.length : 0, queuedActions: Array.isArray(execution.actions) ? execution.actions.length : 0 })).catch(() => setRuntime({ persistent: false, keeperRuns: 0, model: "unavailable", incidents: 0, capsules: 0, queuedActions: 0 }));
   }, []);
 
@@ -112,11 +122,12 @@ export default function InfrastructureDeployer({ wallet, registryAddress }: { wa
         if (!isAddress(continuityGuard)) throw new Error("Deploy Dual Guard first");
         result = await create2Deploy(account, dueviaContinuityPoolBytecode, dueviaContinuityPoolAbi, [continuityGuard as Address], "continuity-pool");
       } else {
-        if (!validGovernance) throw new Error("Enter three unique, independently controlled governance addresses and confirm independence");
+        if (!validConfiguration) throw new Error("Enter three governance addresses and three non-overlapping observer addresses, then confirm independent control");
         localStorage.setItem("duevia-governance-addresses", JSON.stringify(governance));
+        localStorage.setItem("duevia-observer-addresses", JSON.stringify(observers));
         result = kind === "multisig"
           ? await create2Deploy(account, dueviaRecoveryMultisigBytecode, dueviaRecoveryMultisigAbi, [governance as Address[], 2], "recovery-multisig")
-          : await create2Deploy(account, dueviaObserverQuorumBytecode, dueviaObserverQuorumAbi, [governance as Address[], 2], "observer-quorum");
+          : await create2Deploy(account, dueviaObserverQuorumBytecode, dueviaObserverQuorumAbi, [observers as Address[], 2], "observer-quorum");
       }
       saveResult(kind, result);
       if (kind === "coordinator") { setCoordinator(result.address); localStorage.setItem("duevia-recovery-coordinator-v2", result.address); }
@@ -196,10 +207,11 @@ export default function InfrastructureDeployer({ wallet, registryAddress }: { wa
     <div className="monitor-grid"><div className="monitor-card"><span>Persistent Watchdog</span><strong>{runtime.persistent ? "D1 LIVE" : "OFFLINE"}</strong><small>{runtime.keeperRuns} recent keeper run(s)</small></div><div className="monitor-card"><span>AI investigator</span><strong>{runtime.model === "model-grounded" ? "MODEL LIVE" : "FALLBACK"}</strong><small>Structured output + verifier</small></div><div className="monitor-card"><span>Recovery state</span><strong>{runtime.incidents} incidents</strong><small>{runtime.capsules} capsules · {runtime.queuedActions} approval queue</small></div><div className="monitor-card"><span>Coordinator</span><strong>{coordinator ? short(coordinator) : "NOT DEPLOYED"}</strong><small>X Layer Testnet</small></div></div>
     <div className="continuity-buttons"><button className="upload-package" type="button" onClick={() => deploy("coordinator")} disabled={running || Boolean(coordinator)}>Deploy Coordinator</button><button className="upload-package" type="button" onClick={() => deploy("guard")} disabled={running || !coordinator || !registryAddress || Boolean(continuityGuard)}>Deploy Dual Guard</button><button className="anchor-button" type="button" onClick={() => deploy("pool")} disabled={running || !continuityGuard || Boolean(continuityPool)}>Deploy Continuity Pool</button></div>
     <div className="governance-console">
-      <div className="governance-heading"><span>2-OF-3 GOVERNANCE</span><strong>{validGovernance ? "CONFIGURATION VALID" : "ADD INDEPENDENT SIGNERS"}</strong></div>
-      <div className="governance-inputs">{governance.map((value, index) => <label key={index}><span>Signer / observer {index + 1}</span><input value={value} onChange={(event) => setGovernance((current) => current.map((item, itemIndex) => itemIndex === index ? event.target.value.trim() : item))} spellCheck={false} /></label>)}</div>
+      <div className="governance-heading"><span>2-OF-3 GOVERNANCE + OBSERVER QUORUM</span><strong>{validConfiguration ? "CONFIGURATION VALID" : "SEPARATE THE CONTROL PLANES"}</strong></div>
+      <div className="governance-inputs">{governance.map((value, index) => <label key={index}><span>Governance signer {index + 1}</span><input value={value} onChange={(event) => setGovernance((current) => current.map((item, itemIndex) => itemIndex === index ? event.target.value.trim() : item))} spellCheck={false} /></label>)}</div>
+      <div className="governance-inputs observer-inputs">{observers.map((value, index) => <label key={index}><span>Independent observer {index + 1}</span><input value={value} onChange={(event) => setObservers((current) => current.map((item, itemIndex) => itemIndex === index ? event.target.value.trim() : item))} spellCheck={false} /></label>)}</div>
       <label className="governance-confirm"><input type="checkbox" checked={independenceConfirmed} onChange={(event) => setIndependenceConfirmed(event.target.checked)} /><span>I confirm these addresses are controlled independently.</span></label>
-      <div className="continuity-buttons"><button type="button" className="upload-package" onClick={() => deploy("multisig")} disabled={running || !validGovernance || Boolean(multisig)}>Deploy Recovery Multisig</button><button type="button" className="upload-package" onClick={() => deploy("quorum")} disabled={running || !validGovernance || Boolean(quorum)}>Deploy Observer Quorum</button><button type="button" className="anchor-button" onClick={startOwnershipTransfer} disabled={running || !multisig || !coordinator || !registryAddress}>Start both ownership transfers</button></div>
+      <div className="continuity-buttons"><button type="button" className="upload-package" onClick={() => deploy("multisig")} disabled={running || !validConfiguration || Boolean(multisig)}>Deploy Recovery Multisig</button><button type="button" className="upload-package" onClick={() => deploy("quorum")} disabled={running || !validConfiguration || Boolean(quorum)}>Deploy Observer Quorum</button><button type="button" className="anchor-button" onClick={startOwnershipTransfer} disabled={running || !multisig || !coordinator || !registryAddress}>Start both ownership transfers</button></div>
       <div className="governance-actions"><div><span>Registry takeover</span><button type="button" onClick={() => approveTakeover("registry")} disabled={running || !multisig}>Approve</button><button type="button" onClick={() => executeTakeover("registry")} disabled={running || !multisig}>Execute after 2 approvals</button></div><div><span>Coordinator takeover</span><button type="button" onClick={() => approveTakeover("coordinator")} disabled={running || !multisig}>Approve</button><button type="button" onClick={() => executeTakeover("coordinator")} disabled={running || !multisig}>Execute after 2 approvals</button></div></div>
       <button type="button" className="audit-refresh" onClick={refreshAudit} disabled={running || !coordinator || !registryAddress}>Refresh onchain ownership audit</button>
       {audit && <dl className="governance-audit"><div><dt>Registry owner</dt><dd>{audit.registryOwner}</dd></div><div><dt>Coordinator owner</dt><dd>{audit.coordinatorOwner}</dd></div><div><dt>Bootstrap attestor</dt><dd>{audit.bootstrapAttestor ? "STILL AUTHORIZED" : "REVOKED"}</dd></div><div><dt>Bootstrap operator</dt><dd>{audit.bootstrapOperator ? "STILL AUTHORIZED" : "REVOKED"}</dd></div></dl>}
