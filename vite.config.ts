@@ -20,6 +20,7 @@ const localBindingConfig = {
           binding: d1,
           database_name: "site-creator-d1",
           database_id: SITE_CREATOR_PLACEHOLDER_DATABASE_ID,
+          migrations_dir: "./drizzle",
         },
       ]
     : [
@@ -27,6 +28,7 @@ const localBindingConfig = {
           binding: "WATCHDOG_DB",
           database_name: "duevia-watchdog",
           database_id: "5ea7ff98-45e0-43a2-a3a6-e924f4e3a943",
+          migrations_dir: "./drizzle",
         },
       ],
   r2_buckets: r2

@@ -140,3 +140,26 @@ test("servicer route uses independent represented supply", async () => {
   assert.match(route, /tokenSupply: feed\.snapshot\.tokenSupply/);
   assert.doesNotMatch(route, /feed\.assets\.reduce\(.*outstanding/);
 });
+
+test("the deployed worker includes durable operations hardening", async () => {
+  const [worker, migration, operationsRunbook, securityReview, viteConfig] = await Promise.all([
+    readFile(new URL("../worker/index.ts", import.meta.url), "utf8"),
+    readFile(new URL("../drizzle/0007_operations_hardening.sql", import.meta.url), "utf8"),
+    readFile(new URL("../docs/OPERATIONS_RUNBOOK.md", import.meta.url), "utf8"),
+    readFile(new URL("../docs/SECURITY_REVIEW.md", import.meta.url), "utf8"),
+    readFile(new URL("../vite.config.ts", import.meta.url), "utf8"),
+  ]);
+  assert.match(worker, /\/api\/operations\/health/);
+  assert.match(worker, /observer_endpoints_json/);
+  assert.match(worker, /trigger_source/);
+  assert.match(worker, /servicer_feed_receipts/);
+  assert.match(worker, /ObserverReplayRejected/);
+  assert.match(worker, /Keeper lease ownership was lost/);
+  assert.match(worker, /endpoint = normalizePublicEndpoint\(project\.public_endpoint\)/);
+  assert.match(migration, /CREATE TABLE IF NOT EXISTS servicer_feed_receipts/);
+  assert.match(migration, /ADD COLUMN observer_endpoints_json/);
+  assert.match(migration, /ADD COLUMN trigger_source/);
+  assert.match(operationsRunbook, /Keeper/);
+  assert.match(securityReview, /independent audit/i);
+  assert.match(viteConfig, /database_name:\s*["']duevia-watchdog["'][\s\S]*?migrations_dir:\s*["']\.\/drizzle["']/);
+});

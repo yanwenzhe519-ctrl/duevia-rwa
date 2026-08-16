@@ -27,7 +27,7 @@ The current browser demo accepts structured JSON so results stay deterministic a
 
 The deployed Worker is no longer process-memory-only. `WATCHDOG_DB` stores scanner cursors, independent observations, incident evaluations, incidents, Recovery Capsules, AI investigations, execution approvals, and Keeper history. A Cron trigger scans X Layer every five minutes. A D1 lease prevents overlapping Keeper runs. `GET /api/watchdog` exposes redacted public audit metadata; evidence bodies, Capsule contents, snapshots, and execution payloads require administrator authorization. External watchdog writes require either the private administrator token or an allowlisted observer-wallet signature with replay protection.
 
-The canonical adapter boundary is `duevia.servicer-feed/v1`: a signed snapshot envelope containing `poolId`, `capturedAt`, heartbeat state, asset rows, and payment rows. ERP, bank, and servicer adapters can normalize into this format while the same policy engine evaluates every source. See `lib/servicer-feed.mjs` for the validation contract.
+The canonical baseline boundary is `duevia.servicer-feed/v1`: a signed snapshot envelope containing `poolId`, `capturedAt`, heartbeat state, asset rows, and payment rows. ERP, bank, and servicer adapters can normalize into this format while the same policy engine evaluates every source. Independent monitors use `duevia.observer-status/v1` with an allowlisted EVM signature, freshness limit, pool binding, evidence hash, and replay nonce. See `lib/servicer-feed.mjs` and `lib/observer-adapter.mjs`.
 
 ## Onchain design
 
@@ -92,7 +92,7 @@ For an adapter or integration test, sign a feed before posting it:
 node scripts/sign-servicer-feed.mjs examples/servicer-feed.json /tmp/servicer-feed.signed.json "$SERVICER_FEED_HMAC_SECRET"
 ```
 
-Then send the signed JSON to `POST /api/servicer-feed`. The endpoint rejects a duplicate `(poolId, capturedAt, signature)` during the process lifetime; production deployments should replace this cache with durable nonce/replay storage shared by all instances. Keep raw evidence encrypted in the servicer's system, rotate signing keys, and use a dedicated attestor or multisig for the resulting X Layer attestation.
+Then send the signed JSON to `POST /api/servicer-feed`. The Worker persists a replay receipt for `(poolId, capturedAt, signature)` in D1, updates only a registered project, stores a sanitized observation, and never exposes the raw asset tape through public monitoring APIs. Keep raw evidence encrypted in the servicer's system, rotate signing keys, and use a dedicated attestor or multisig for the resulting X Layer attestation.
 
 ## Testnet deployment
 
@@ -102,7 +102,9 @@ For production, use a separately reviewed deployment process and a multisig/role
 
 ### Wallet identity
 
-All DApp deployments and attestations use the wallet currently connected through `window.ethereum`. The application does not contain a project wallet address, private key, or fallback signer. Keep one browser wallet account selected for the testnet and later mainnet run; the Agentic Wallet CLI account is separate and is not used by the DApp.
+All DApp deployments and attestations use the wallet currently connected through `window.ethereum`. The final testnet console pins the public project bootstrap address to prevent accidental deployment from an old CLI account; it contains no private key or fallback signer. Registry and Coordinator ownership must be transferred to the recovery multisig, after which the bootstrap attestor/operator privileges are revoked. The Agentic Wallet CLI account is separate and is not used by the DApp.
+
+Operational health, signed observer adapters, redundant Keeper setup, release rollback, and immutable-contract migration are documented in `docs/OPERATIONS_RUNBOOK.md`. The current security posture and mainnet blockers are listed in `docs/SECURITY_REVIEW.md`.
 
 X Layer Testnet configuration:
 
