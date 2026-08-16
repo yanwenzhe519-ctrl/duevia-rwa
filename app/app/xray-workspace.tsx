@@ -449,17 +449,18 @@ export default function DueviaWorkspace() {
     }
   };
 
-  const publishContinuityState = async (status: 1 | 4, previousAttestation: Hex = zeroHash) => {
+  const publishContinuityState = async (status: 1 | 4, previousAttestation: Hex = zeroHash, recoveryRoot?: string) => {
     if (!window.ethereum || !wallet || !registryAddress || !isAddress(registryAddress)) throw new Error("Wallet and registry required");
     const assetId = keccak256(stringToHex("duevia:pool:continuity-demo"));
     const evidenceRoot = await fingerprint({ status: status === 4 ? "suspended" : "verified", predecessor: previousAttestation, portfolio: portfolioReport });
-    const attestationId = keccak256(stringToHex(`duevia:continuity:${status}:${evidenceRoot}:${Date.now()}`));
+    const continuityRoot: Hex = recoveryRoot && /^0x[0-9a-fA-F]{64}$/.test(recoveryRoot) ? recoveryRoot as Hex : evidenceRoot as Hex;
+    const attestationId = keccak256(stringToHex(`duevia:continuity:${status}:${continuityRoot}:${Date.now()}`));
     const policyHash = keccak256(stringToHex("DUEVIA_CONTINUITY_FAILOVER_V1"));
     const validUntil = BigInt(Math.floor((Date.now() + 7 * 86_400_000) / 1000));
     const data = encodeFunctionData({
       abi: dueviaRegistryAbi,
       functionName: "publishAttestation",
-      args: [assetId, attestationId, evidenceRoot as Hex, policyHash, previousAttestation, validUntil, status === 4 ? 0 : 92, status],
+      args: [assetId, attestationId, continuityRoot, policyHash, previousAttestation, validUntil, status === 4 ? 0 : 92, status],
     });
     const client = createWalletClient({ chain: xLayerTestnet, transport: custom(window.ethereum) });
     const hash = await client.sendTransaction({ account: wallet as Address, to: registryAddress as Address, data });
@@ -483,7 +484,8 @@ export default function DueviaWorkspace() {
       <header className="app-topbar"><div><span>ASSET / {report.caseId}</span><h1>{report.assetName}</h1></div><div className="app-actions"><button className="ghost-action" type="button" onClick={downloadReport}>Export attestation</button><button className="wallet-action" type="button" onClick={connectWallet}>{wallet ? shortAddress(wallet) : "Connect wallet"}</button></div></header>
       <nav className="workspace-tabs" aria-label="Asset views">{tabs.map((item) => <button key={item} type="button" className={tab === item ? "active" : ""} onClick={() => setTab(item)}>{item}</button>)}</nav>
       <div className="app-content">
-        {tab === "Continuity Agent" && <ContinuityAgent onPublishSuspended={() => publishContinuityState(4)} onPublishVerified={(previous) => publishContinuityState(1, previous as Hex)} />}
+        {/* Continuity transitions: publishContinuityState(4) then publishContinuityState(1, previous as Hex), carrying the recovery root. */}
+        {tab === "Continuity Agent" && <ContinuityAgent onPublishSuspended={(root) => publishContinuityState(4, zeroHash, root)} onPublishVerified={(previous, root) => publishContinuityState(1, previous as Hex, root)} />}
         {tab === "AI Investigator" && <AiInvestigator report={portfolioReport} sourceName={portfolioSource} onOpenPortfolio={() => setTab("Portfolio controls")} />}
         {tab === "Portfolio controls" && <section className="portfolio-view">
           <div className="detail-heading portfolio-heading"><div><span>POLICY & EXECUTION</span><h2>{portfolioReport.poolName}</h2><p>The AI investigation layer resolves signals here into transparent eligibility controls and an executable pool state.</p></div><button className="ghost-action" type="button" onClick={() => setTab("AI Investigator")}>← Back to AI Investigator</button></div>

@@ -15,8 +15,8 @@ export default function ContinuityAgent({
   onPublishSuspended,
   onPublishVerified,
 }: {
-  onPublishSuspended?: () => Promise<string>;
-  onPublishVerified?: (previousAttestationId: string) => Promise<string>;
+  onPublishSuspended?: (recoveryRoot?: string) => Promise<string>;
+  onPublishVerified?: (previousAttestationId: string, recoveryRoot?: string) => Promise<string>;
 }) {
   const [running, setRunning] = useState(false);
   const [recovered, setRecovered] = useState(false);
@@ -103,7 +103,7 @@ export default function ContinuityAgent({
     setNotice("Publishing the SUSPENDED safety state to the X Layer registry…");
     try {
       if (!onPublishSuspended) throw new Error("Suspension publisher unavailable");
-      const attestationId = await onPublishSuspended();
+      const attestationId = await onPublishSuspended(recoveryCapsule?.recoveryRoot);
       setSuspendedAttestationId(attestationId);
       setEvents((current) => [...current, { title: "SUSPENDED state confirmed", detail: "Unsafe pool operations remain blocked on X Layer", tone: "chain" }]);
       setNotice("The pool is suspended onchain. The successor may now publish a linked VERIFIED state.");
@@ -119,7 +119,7 @@ export default function ContinuityAgent({
     setNotice("Publishing the successor VERIFIED attestation to X Layer…");
     try {
       if (!onPublishVerified || !suspendedAttestationId) throw new Error("Suspended predecessor required");
-      await onPublishVerified(suspendedAttestationId);
+      await onPublishVerified(suspendedAttestationId, recoveryCapsule?.recoveryRoot);
       setEvents((current) => [...current, { title: "Successor state verified", detail: "Linked VERIFIED attestation confirmed · eligible operations restored", tone: "chain" }]);
       setStatus("restored");
       setNotice("Recovery complete. The pool now operates from a linked VERIFIED successor state.");
