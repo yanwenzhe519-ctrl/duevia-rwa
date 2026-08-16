@@ -15,8 +15,9 @@ contract DueviaObserverQuorum {
     error QuorumNotReached();
     error AlreadyExecuted();
     error ExecutionFailed();
+    error InvalidAction();
 
-    event ObservationSubmitted(bytes32 indexed quorumId, bytes32 indexed incidentId, uint64 indexed epoch, bytes32 reportHash, address observer, uint256 votes);
+    event ObservationSubmitted(bytes32 indexed quorumId, bytes32 indexed incidentId, uint64 indexed epoch, bytes32 reportHash, address target, bytes32 callHash, address observer, uint256 votes);
     event QuorumExecuted(bytes32 indexed quorumId, address indexed target);
 
     constructor(address[] memory observers, uint256 threshold_) {
@@ -28,21 +29,24 @@ contract DueviaObserverQuorum {
         threshold = threshold_;
     }
 
-    function quorumId(bytes32 incidentId, uint64 epoch, bytes32 reportHash) public pure returns (bytes32) {
-        return keccak256(abi.encode(incidentId, epoch, reportHash));
+    function quorumId(bytes32 incidentId, uint64 epoch, bytes32 reportHash, address target, bytes32 callHash) public pure returns (bytes32) {
+        return keccak256(abi.encode(incidentId, epoch, reportHash, target, callHash));
     }
 
-    function submit(bytes32 incidentId, uint64 epoch, bytes32 reportHash) external returns (bytes32 id) {
+    function submit(bytes32 incidentId, uint64 epoch, bytes32 reportHash, address target, bytes calldata data) external returns (bytes32 id) {
         if (!isObserver[msg.sender]) revert NotObserver();
-        id = quorumId(incidentId, epoch, reportHash);
+        if (incidentId == bytes32(0) || reportHash == bytes32(0) || target == address(0) || data.length < 4) revert InvalidAction();
+        bytes32 callHash = keccak256(data);
+        id = quorumId(incidentId, epoch, reportHash, target, callHash);
         if (voted[id][msg.sender]) revert AlreadyVoted();
         voted[id][msg.sender] = true;
         votes[id] += 1;
-        emit ObservationSubmitted(id, incidentId, epoch, reportHash, msg.sender, votes[id]);
+        emit ObservationSubmitted(id, incidentId, epoch, reportHash, target, callHash, msg.sender, votes[id]);
     }
 
     function execute(bytes32 incidentId, uint64 epoch, bytes32 reportHash, address target, bytes calldata data) external returns (bytes memory result) {
-        bytes32 id = quorumId(incidentId, epoch, reportHash);
+        if (target == address(0) || data.length < 4) revert InvalidAction();
+        bytes32 id = quorumId(incidentId, epoch, reportHash, target, keccak256(data));
         if (votes[id] < threshold) revert QuorumNotReached();
         if (executed[id]) revert AlreadyExecuted();
         executed[id] = true;
@@ -52,4 +56,3 @@ contract DueviaObserverQuorum {
         return response;
     }
 }
-

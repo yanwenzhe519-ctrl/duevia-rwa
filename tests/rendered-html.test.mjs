@@ -71,6 +71,9 @@ test("recovery coordinator preserves the real-world failure lifecycle", async ()
   assert.match(contract, /function isCapitalFlowAllowed\(bytes32 incidentId\) external view returns \(bool\)/);
   assert.match(contract, /function transferOwnership\(address nextOwner\)/);
   assert.match(contract, /function acceptOwnership\(\)/);
+  assert.match(contract, /operators\[previousOwner\] = false/);
+  assert.match(contract, /incidents\[incidentId\]\.state != State\.None\) revert InvalidIncident/);
+  assert.doesNotMatch(contract, /msg\.sender != incident\.successor/);
 });
 
 test("continuity guard and pool require asset and incident eligibility together", async () => {
@@ -86,8 +89,11 @@ test("independent observer quorum and multisig gate exceptional recovery actions
   const multisig = await readFile(new URL("../contracts/DueviaRecoveryMultisig.sol", import.meta.url), "utf8");
   assert.match(quorum, /threshold_ < 2/);
   assert.match(quorum, /votes\[id\] < threshold/);
+  assert.match(quorum, /keccak256\(abi\.encode\(incidentId, epoch, reportHash, target, callHash\)\)/);
+  assert.match(quorum, /keccak256\(data\)/);
   assert.match(multisig, /approvals\[txHash\] < threshold/);
   assert.match(multisig, /keccak256\(abi\.encode\(block\.chainid, address\(this\)/);
+  assert.match(multisig, /threshold_ < 2/);
 });
 
 test("the receivables pool gates real value-bearing deposits", async () => {

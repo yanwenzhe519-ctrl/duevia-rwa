@@ -15,12 +15,13 @@ contract DueviaRecoveryMultisig {
     error AlreadyApproved();
     error InsufficientApprovals();
     error ExecutionFailed();
+    error InvalidTarget();
 
     event Approved(bytes32 indexed transactionHash, address indexed signer, uint256 approvals);
     event Executed(bytes32 indexed transactionHash, address indexed target, uint256 value, uint256 nonce);
 
     constructor(address[] memory signers, uint256 threshold_) {
-        if (threshold_ == 0 || threshold_ > signers.length) revert InvalidConfiguration();
+        if (threshold_ < 2 || threshold_ > signers.length) revert InvalidConfiguration();
         for (uint256 i; i < signers.length; i++) {
             if (signers[i] == address(0) || isSigner[signers[i]]) revert InvalidConfiguration();
             isSigner[signers[i]] = true;
@@ -34,6 +35,7 @@ contract DueviaRecoveryMultisig {
 
     function approve(address target, uint256 value, bytes calldata data) external returns (bytes32 txHash) {
         if (!isSigner[msg.sender]) revert NotSigner();
+        if (target == address(0)) revert InvalidTarget();
         txHash = transactionHash(target, value, data, nonce);
         if (approvedBy[txHash][msg.sender]) revert AlreadyApproved();
         approvedBy[txHash][msg.sender] = true;
@@ -43,6 +45,7 @@ contract DueviaRecoveryMultisig {
 
     function execute(address target, uint256 value, bytes calldata data) external returns (bytes memory result) {
         if (!isSigner[msg.sender]) revert NotSigner();
+        if (target == address(0)) revert InvalidTarget();
         bytes32 txHash = transactionHash(target, value, data, nonce);
         if (approvals[txHash] < threshold) revert InsufficientApprovals();
         uint256 executedNonce = nonce++;
@@ -54,4 +57,3 @@ contract DueviaRecoveryMultisig {
 
     receive() external payable {}
 }
-

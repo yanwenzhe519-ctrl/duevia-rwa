@@ -57,7 +57,10 @@ contract DueviaRecoveryCoordinator {
         address previousOwner = owner;
         owner = pendingOwner;
         pendingOwner = address(0);
+        operators[previousOwner] = false;
         operators[owner] = true;
+        emit OperatorChanged(previousOwner, false);
+        emit OperatorChanged(owner, true);
         emit OwnershipTransferred(previousOwner, owner);
     }
 
@@ -80,7 +83,7 @@ contract DueviaRecoveryCoordinator {
         uint64 lastTrustedAt
     ) external onlyOperator {
         if (incidentId == bytes32(0) || poolId == bytes32(0) || servicerId == bytes32(0) || lastTrustedAt > block.timestamp) revert InvalidIncident();
-        if (incidents[incidentId].state != State.None && incidents[incidentId].state != State.Closed) revert InvalidIncident();
+        if (incidents[incidentId].state != State.None) revert InvalidIncident();
         incidents[incidentId] = Incident(poolId, servicerId, previousAttestation, bytes32(0), bytes32(0), uint64(block.timestamp), lastTrustedAt, State.Suspended, address(0));
         emit IncidentOpened(incidentId, poolId, servicerId, previousAttestation, lastTrustedAt);
     }
@@ -98,6 +101,7 @@ contract DueviaRecoveryCoordinator {
     function proposeSuccessor(bytes32 incidentId, address successor) external onlyOperator {
         Incident storage incident = incidents[incidentId];
         if (incident.state == State.None || incident.state == State.Closed || successor == address(0)) revert UnknownIncident();
+        if (incident.state == State.Verified) revert InvalidTransition();
         incident.successor = successor;
         emit SuccessorProposed(incidentId, successor);
     }
@@ -105,7 +109,7 @@ contract DueviaRecoveryCoordinator {
     function verifySuccessor(bytes32 incidentId, bytes32 successorAttestation) external {
         Incident storage incident = incidents[incidentId];
         if (incident.state == State.None || incident.state == State.Closed) revert UnknownIncident();
-        if (msg.sender != owner && msg.sender != incident.successor && !operators[msg.sender]) revert NotOperator();
+        if (msg.sender != owner && !operators[msg.sender]) revert NotOperator();
         if (incident.state != State.Reconstructed || incident.recoveryRoot == bytes32(0) || successorAttestation == bytes32(0)) revert InvalidTransition();
         incident.successorAttestation = successorAttestation;
         incident.state = State.Verified;
