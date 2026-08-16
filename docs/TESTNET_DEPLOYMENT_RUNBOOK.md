@@ -19,8 +19,9 @@ This runbook applies to the current continuity contracts. Existing legacy Regist
 4. Deploy `DueviaContinuityPool` with the Dual Guard address.
 5. Deploy `DueviaRecoveryMultisig` with independent signers and threshold `2` or greater.
 6. Deploy `DueviaObserverQuorum` with independent observers and threshold `2` or greater.
-7. Through the multisig, accept Coordinator ownership and authorize only the required Keeper/quorum operator.
-8. Confirm that the bootstrap owner no longer retains implicit operator rights after ownership transfer.
+7. Start two-step ownership transfers for both Registry and Coordinator to the multisig.
+8. Through the multisig, accept ownership of both contracts and authorize only the required Registry attestor and Coordinator Keeper/quorum operator.
+9. Confirm that the bootstrap wallet is no longer an authorized Registry attestor and no longer retains implicit Coordinator operator rights.
 
 ## Required rehearsal
 

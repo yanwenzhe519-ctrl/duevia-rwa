@@ -17,16 +17,20 @@ contract DueviaAssetAssuranceRegistry {
         address attestor;
     }
 
-    address public immutable owner;
+    address public owner;
+    address public pendingOwner;
     mapping(address => bool) public authorizedAttestors;
     mapping(bytes32 => Attestation) private attestations;
     mapping(bytes32 => bool) public exists;
 
     event AttestorAuthorizationChanged(address indexed attestor, bool authorized);
+    event OwnershipTransferStarted(address indexed previousOwner, address indexed pendingOwner);
+    event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
     event AttestationPublished(bytes32 indexed assetId, bytes32 indexed attestationId, bytes32 evidenceRoot, bytes32 policyHash, uint64 validUntil, uint8 score, Status status, address indexed attestor);
     event AttestationStatusChanged(bytes32 indexed assetId, bytes32 indexed attestationId, Status status, address indexed updater);
 
     error NotOwner();
+    error NotPendingOwner();
     error NotAuthorizedAttestor();
     error AlreadyPublished();
     error UnknownAttestation();
@@ -44,6 +48,25 @@ contract DueviaAssetAssuranceRegistry {
         if (msg.sender != owner) revert NotOwner();
         authorizedAttestors[attestor] = authorized;
         emit AttestorAuthorizationChanged(attestor, authorized);
+    }
+
+    function transferOwnership(address nextOwner) external {
+        if (msg.sender != owner) revert NotOwner();
+        if (nextOwner == address(0)) revert NotOwner();
+        pendingOwner = nextOwner;
+        emit OwnershipTransferStarted(owner, nextOwner);
+    }
+
+    function acceptOwnership() external {
+        if (msg.sender != pendingOwner) revert NotPendingOwner();
+        address previousOwner = owner;
+        owner = msg.sender;
+        pendingOwner = address(0);
+        authorizedAttestors[previousOwner] = false;
+        authorizedAttestors[msg.sender] = true;
+        emit AttestorAuthorizationChanged(previousOwner, false);
+        emit AttestorAuthorizationChanged(msg.sender, true);
+        emit OwnershipTransferred(previousOwner, msg.sender);
     }
 
     function publishAttestation(

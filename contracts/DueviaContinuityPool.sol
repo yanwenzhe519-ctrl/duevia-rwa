@@ -12,12 +12,14 @@ contract DueviaContinuityPool {
     uint256 public totalDeposited;
 
     error ZeroAmount();
+    error InvalidConfiguration();
     error InsufficientBalance();
     error TransferFailed();
     event DepositAccepted(address indexed account, bytes32 indexed attestationId, bytes32 indexed incidentId, uint256 amount);
     event Withdrawn(address indexed account, uint256 amount);
 
     constructor(address guardAddress) {
+        if (guardAddress == address(0)) revert InvalidConfiguration();
         guard = IDueviaContinuityGuard(guardAddress);
     }
 
@@ -38,4 +40,3 @@ contract DueviaContinuityPool {
         emit Withdrawn(msg.sender, amount);
     }
 }
-

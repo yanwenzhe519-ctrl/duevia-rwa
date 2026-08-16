@@ -110,10 +110,10 @@ contract DueviaRecoveryCoordinator {
         Incident storage incident = incidents[incidentId];
         if (incident.state == State.None || incident.state == State.Closed) revert UnknownIncident();
         if (msg.sender != owner && !operators[msg.sender]) revert NotOperator();
-        if (incident.state != State.Reconstructed || incident.recoveryRoot == bytes32(0) || successorAttestation == bytes32(0)) revert InvalidTransition();
+        if (incident.state != State.Reconstructed || incident.recoveryRoot == bytes32(0) || incident.successor == address(0) || successorAttestation == bytes32(0)) revert InvalidTransition();
         incident.successorAttestation = successorAttestation;
         incident.state = State.Verified;
-        emit SuccessorVerified(incidentId, successorAttestation, msg.sender);
+        emit SuccessorVerified(incidentId, successorAttestation, incident.successor);
     }
 
     function markRestructuring(bytes32 incidentId) external onlyOperator {

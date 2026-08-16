@@ -38,11 +38,23 @@ test("the temporary Sites skeleton is removed from the finished project", async 
 });
 
 test("the registry preserves private evidence and exposes eligibility", async () => {
-  const contract = await readFile(new URL("../contracts/DueviaAssetAssuranceRegistry.sol", import.meta.url), "utf8");
+  const [contract, artifact, packageJson] = await Promise.all([
+    readFile(new URL("../contracts/DueviaAssetAssuranceRegistry.sol", import.meta.url), "utf8"),
+    readFile(new URL("../lib/duevia-registry-artifact.ts", import.meta.url), "utf8"),
+    readFile(new URL("../package.json", import.meta.url), "utf8"),
+  ]);
   assert.match(contract, /evidenceRoot/);
   assert.match(contract, /policyHash/);
   assert.match(contract, /Raw evidence remains offchain/);
   assert.match(contract, /isEligible/);
+  assert.match(contract, /function transferOwnership\(address nextOwner\)/);
+  assert.match(contract, /function acceptOwnership\(\)/);
+  assert.match(contract, /authorizedAttestors\[previousOwner\] = false/);
+  assert.match(contract, /authorizedAttestors\[msg\.sender\] = true/);
+  assert.doesNotMatch(contract, /address public immutable owner/);
+  assert.match(artifact, /"name":"pendingOwner"/);
+  assert.match(artifact, /"name":"acceptOwnership"/);
+  assert.match(packageJson, /compile-registry\.mjs/);
 });
 
 test("the CREATE2 registry salt is exactly 32 bytes", async () => {
@@ -73,6 +85,8 @@ test("recovery coordinator preserves the real-world failure lifecycle", async ()
   assert.match(contract, /function acceptOwnership\(\)/);
   assert.match(contract, /operators\[previousOwner\] = false/);
   assert.match(contract, /incidents\[incidentId\]\.state != State\.None\) revert InvalidIncident/);
+  assert.match(contract, /incident\.successor == address\(0\)/);
+  assert.match(contract, /emit SuccessorVerified\(incidentId, successorAttestation, incident\.successor\)/);
   assert.doesNotMatch(contract, /msg\.sender != incident\.successor/);
 });
 

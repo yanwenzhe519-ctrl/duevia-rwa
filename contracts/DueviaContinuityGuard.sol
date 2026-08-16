@@ -17,9 +17,10 @@ contract DueviaContinuityGuard {
 
     error AssetNotEligible();
     error IncidentNotVerified();
+    error InvalidConfiguration();
 
     constructor(address registryAddress, address coordinatorAddress, uint8 minimumScore_) {
-        if (registryAddress == address(0) || coordinatorAddress == address(0)) revert IncidentNotVerified();
+        if (registryAddress == address(0) || coordinatorAddress == address(0) || minimumScore_ > 100) revert InvalidConfiguration();
         registry = IDueviaRegistryV2(registryAddress);
         coordinator = IDueviaRecoveryCoordinatorV2(coordinatorAddress);
         minimumScore = minimumScore_;
@@ -30,4 +31,3 @@ contract DueviaContinuityGuard {
         if (!coordinator.isCapitalFlowAllowed(incidentId)) revert IncidentNotVerified();
     }
 }
-
