@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://xray-rwa.yanwenzhe519.chatgpt.site"),
+  metadataBase: new URL("https://duevia-rwa.cardrevive-agent.workers.dev"),
   title: "Duevia RWA — AI investigation and decision infrastructure",
   description: "Agentic RWA investigation, grounded risk decisions, and executable asset states on X Layer.",
   icons: { icon: "/duevia-avatar.png", shortcut: "/duevia-avatar.png" },
