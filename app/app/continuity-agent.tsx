@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 
 type EventRow = { title: string; detail: string; tone: "ok" | "warn" | "ai" | "chain" };
 type FeedContext = { poolId: string; source: string; capturedAt: string; heartbeat: string; stale: boolean; ageHours: number; assetCount: number; paymentCount: number; totalOutstanding: number; eligibleOutstanding: number; policyState: string; alerts: Array<{ code: string; severity: string; assetCount: number }> };
+type RecoveryCapsule = { schema: string; recoveryRoot: string; state: string; incidentId: string; totals: { assetCount: number; reconstructedOutstanding: number; conflictCount: number; highConfidenceAssets: number }; assets: Array<{ assetId: string; status: string; reconstructedOutstanding: number; confidence: string; conflicts: Array<{ code: string }> }> };
 
 const initialEvents: EventRow[] = [
   { title: "Servicer heartbeat received", detail: "Primary servicer · 14 Aug 2026 · 09:00 UTC", tone: "ok" },
@@ -26,16 +27,18 @@ export default function ContinuityAgent({
   const [aiSummary, setAiSummary] = useState("");
   const [suspendedAttestationId, setSuspendedAttestationId] = useState("");
   const [feedContext, setFeedContext] = useState<FeedContext | null>(null);
+  const [recoveryCapsule, setRecoveryCapsule] = useState<RecoveryCapsule | null>(null);
   const feedInput = useRef<HTMLInputElement>(null);
 
   const loadSignedFeed = async (file: File) => {
     setRunning(true);
     try {
       const response = await fetch("/api/servicer-feed", { method: "POST", headers: { "Content-Type": "application/json" }, body: await file.text() });
-      const data = await response.json() as { error?: string; sanitizedContext?: FeedContext };
+      const data = await response.json() as { error?: string; sanitizedContext?: FeedContext; recoveryCapsule?: RecoveryCapsule };
       if (!response.ok || !data.sanitizedContext) throw new Error(data.error || "Feed rejected");
       const context = data.sanitizedContext;
       setFeedContext(context);
+      setRecoveryCapsule(data.recoveryCapsule || null);
       setEvents((current) => [...current, { title: "Signed servicer feed verified", detail: `${context.source} · ${context.assetCount} assets`, tone: "ok" }]);
       setNotice(`Verified ${file.name}. Policy state: ${context.policyState.toUpperCase()}.`);
     } catch (error) {
@@ -57,6 +60,17 @@ export default function ContinuityAgent({
     await new Promise((resolve) => window.setTimeout(resolve, 800));
     setEvents((current) => [...current, { title: "X Layer circuit breaker armed", detail: "New issuance and pool deposits are now blocked", tone: "chain" }]);
     await new Promise((resolve) => window.setTimeout(resolve, 800));
+    if (!recoveryCapsule) {
+      try {
+        const response = await fetch("/api/reconstruct", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({
+          snapshot: { poolId: "RCV-018", source: "last-trusted-capsule", capturedAt: new Date(Date.now() - 72 * 3_600_000).toISOString(), assets: [{ assetId: "INV-001", invoiceId: "INV-001", debtor: "Demo buyer", faceValue: 100000, outstanding: 100000, documentHash: "demo-root-001" }, { assetId: "INV-002", invoiceId: "INV-002", debtor: "Demo buyer", faceValue: 80000, outstanding: 80000, documentHash: "demo-root-002" }] },
+          payments: [{ paymentId: "CHAIN-PAY-001", invoiceId: "INV-001", amount: 10000, paidAt: new Date(Date.now() - 24 * 3_600_000).toISOString() }],
+          chainEvents: [{ eventId: "X-LAYER-PAYMENT-001", invoiceId: "INV-001", txHash: "0xdemo" }], incident: { servicerId: "primary-servicer" },
+        }) });
+        const data = await response.json() as { capsule?: RecoveryCapsule };
+        if (response.ok && data.capsule) setRecoveryCapsule(data.capsule);
+      } catch { /* AI plan and deterministic controls remain available if reconstruction API is unavailable. */ }
+    }
     let summary = "Reconciled the last signed capsule with 3 onchain payment events; 1 exception requires successor review.";
     let mode: "model-grounded" | "grounded-fallback" = "grounded-fallback";
     try {
@@ -65,7 +79,7 @@ export default function ContinuityAgent({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           question: "Prepare a concise recovery plan after the primary RWA servicer missed its 72-hour heartbeat SLA.",
-          context: feedContext || { pool: "Receivables pool RCV-018", outstanding: "420,000 USDT", assets: 18, lastSignedCapsuleHoursAgo: 72, onchainPaymentsAfterCapsule: 3, unresolvedExceptions: 1, enforcedState: "New issuance and deposits paused on X Layer", sourceMode: "labelled-demo" },
+          context: { ...(feedContext || { pool: "Receivables pool RCV-018", outstanding: "420,000 USDT", assets: 18, lastSignedCapsuleHoursAgo: 72, onchainPaymentsAfterCapsule: 3, unresolvedExceptions: 1, enforcedState: "New issuance and deposits paused on X Layer", sourceMode: "labelled-demo" }), recoveryCapsule },
         }),
       });
       const data = await response.json() as { answer?: string; mode?: "model-grounded" };
@@ -124,7 +138,7 @@ export default function ContinuityAgent({
 
     <div className="continuity-actions"><div><span className="section-index">FAILOVER CONTROL · {feedContext ? "SIGNED FEED" : "LABELLED DEMO"}</span><h3>Detect, suspend, verify, resume.</h3><p>{notice}</p></div><div className="continuity-buttons"><input ref={feedInput} hidden type="file" accept="application/json,.json" onChange={(event) => event.target.files?.[0] && loadSignedFeed(event.target.files[0])} /><button className="upload-package" type="button" onClick={() => feedInput.current?.click()} disabled={running}>Load signed feed</button><button className="run-check" type="button" onClick={simulateFailure} disabled={running || status === "recovery"}>{running ? "Agent working…" : "Simulate servicer outage"}<span>→</span></button><button className="anchor-button" type="button" onClick={suspendOnchain} disabled={!recovered || Boolean(suspendedAttestationId) || running}>{suspendedAttestationId ? "SUSPENDED on X Layer" : "Publish SUSPENDED"}<span>→</span></button><button className="anchor-button" type="button" onClick={verifySuccessor} disabled={!suspendedAttestationId || running || status === "restored"}>{status === "restored" ? "VERIFIED on X Layer" : "Publish successor VERIFIED"}<span>→</span></button></div></div>
 
-    <div className="continuity-grid"><section className="continuity-events"><div className="panel-title"><div><span>EVENT LOG</span><h3>What actually happened</h3></div><b>{events.length} events</b></div><div className="event-list">{events.map((event, index) => <article key={`${event.title}-${index}`}><i className={event.tone}>{event.tone === "ai" ? "✦" : event.tone === "chain" ? "D" : event.tone === "warn" ? "!" : "✓"}</i><div><strong>{event.title}</strong><small>{event.detail}</small></div><em>{index === events.length - 1 && running ? "RUNNING" : "RECORDED"}</em></article>)}</div></section>
+    <div className="continuity-grid"><section className="continuity-events"><div className="panel-title"><div><span>EVENT LOG</span><h3>What actually happened</h3></div><b>{events.length} events</b></div><div className="event-list">{events.map((event, index) => <article key={`${event.title}-${index}`}><i className={event.tone}>{event.tone === "ai" ? "✦" : event.tone === "chain" ? "D" : event.tone === "warn" ? "!" : "✓"}</i><div><strong>{event.title}</strong><small>{event.detail}</small></div><em>{index === events.length - 1 && running ? "RUNNING" : "RECORDED"}</em></article>)}</div>{recoveryCapsule && <div className="recovery-capsule"><div><span>RECOVERY CAPSULE · {recoveryCapsule.state}</span><strong>{recoveryCapsule.totals.assetCount} assets · {recoveryCapsule.totals.reconstructedOutstanding.toLocaleString()} reconstructed outstanding</strong><small>Root {recoveryCapsule.recoveryRoot.slice(0, 22)}… · {recoveryCapsule.totals.conflictCount} conflicts · {recoveryCapsule.totals.highConfidenceAssets} higher-confidence assets</small></div><code>{recoveryCapsule.assets.slice(0, 4).map((asset) => `${asset.assetId}: ${asset.status} / ${asset.confidence}`).join("\n")}</code></div>}</section>
       <aside className="recovery-panel"><span className="proof-label">AI RECOVERY PLAN · {aiMode === "model-grounded" ? "AI MODEL LIVE" : aiMode === "grounded-fallback" ? "DETERMINISTIC FALLBACK" : "READY"}</span><h3>Evidence becomes<br />a handoff.</h3><p>{aiSummary || "AI maps the last signed snapshot, chain events, and repayment rules. Money math stays deterministic; humans approve the permission change."}</p><div className="recovery-checks"><div><i>✓</i><span>{feedContext?.assetCount ?? 18} assets resolved<small>Snapshot · {feedContext ? `${feedContext.ageHours.toFixed(1)}h old` : "72h demo"}</small></span></div><div><i>✓</i><span>{feedContext?.paymentCount ?? 3} payments reconciled<small>Signed payment records</small></span></div><div><i>!</i><span>{feedContext?.alerts.length ?? 1} exception(s)<small>Deterministic policy result</small></span></div></div><small className="proof-note">Raw borrower data stays encrypted offchain. X Layer receives only the recovery root, policy, status, and validity window.</small></aside></div>
   </section>;
 }

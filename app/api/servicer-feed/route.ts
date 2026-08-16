@@ -1,6 +1,7 @@
 import { analyzePortfolio } from "@/lib/portfolio-engine.mjs";
 import { parseServicerFeed, servicerFeedStatus } from "@/lib/servicer-feed.mjs";
 import { verifyServicerFeedSignature } from "@/lib/servicer-feed-security.mjs";
+import { reconstructAssetState } from "@/lib/reconstruction-engine.mjs";
 
 const MAX_AGE_HOURS = 72;
 const replayCache = new Map<string, number>();
@@ -51,6 +52,7 @@ export async function POST(request: Request) {
       tokenSupply: feed.snapshot.tokenSupply,
     });
     const context = sanitizedContext(feed, report, status);
+    const recoveryCapsule = reconstructAssetState({ snapshot: { ...feed.snapshot, assets: feed.assets }, payments: feed.payments as never[], incident: { servicerId: feed.snapshot.source } });
     let ai: { answer?: string; mode: string } = { mode: "grounded-fallback" };
     if (process.env.OPENAI_API_KEY) {
       const response = await fetch(new URL("/api/agent", request.url), {
@@ -61,7 +63,7 @@ export async function POST(request: Request) {
       const data = await response.json() as { answer?: string; mode?: string };
       ai = { answer: data.answer, mode: data.mode || "grounded-fallback" };
     }
-    return Response.json({ ok: true, source: feed.snapshot.source, status, policy: { state: report.state, metrics: report.metrics, alerts: report.alerts }, ai, sanitizedContext: context }, { headers: { "Cache-Control": "no-store" } });
+    return Response.json({ ok: true, source: feed.snapshot.source, status, policy: { state: report.state, metrics: report.metrics, alerts: report.alerts }, recoveryCapsule, ai, sanitizedContext: { ...context, recoveryRoot: recoveryCapsule.recoveryRoot, reconstructedState: recoveryCapsule.state, reconstructionConflicts: recoveryCapsule.totals.conflictCount } }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     return Response.json({ ok: false, error: error instanceof Error ? error.message : "Servicer feed rejected." }, { status: 422, headers: { "Cache-Control": "no-store" } });
   }

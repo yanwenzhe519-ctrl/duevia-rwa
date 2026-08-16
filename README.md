@@ -46,6 +46,10 @@ npm run dev
 
 The AI panel works without credentials using a deterministic, clearly-labelled fallback. To enable model-grounded recovery plans, configure the server environment (never expose these values as `NEXT_PUBLIC_*`):
 
+### What recovery actually produces
+
+An outage is not considered recovered when an AI summary is displayed. `POST /api/reconstruct` produces a review-ready `duevia.recovery-capsule/v1` artifact with per-asset reconstructed balances, independently matched payments and chain/public observations, evidence references, conflict codes, confidence, required approvals, and a deterministic `recoveryRoot`. The UI displays this capsule before a successor attestation is authorized. Any conflict forces `REVIEW` and requires successor plus governance approval; no AI output can silently turn uncertain balances into eligible collateral.
+
 ```bash
 OPENAI_API_KEY=...
 OPENAI_MODEL=gpt-5-mini
