@@ -110,6 +110,20 @@ test("independent observer quorum and multisig gate exceptional recovery actions
   assert.match(multisig, /threshold_ < 2/);
 });
 
+test("the deployment console enforces final governance and ownership handoff", async () => {
+  const deployer = await readFile(new URL("../app/app/infrastructure-deployer.tsx", import.meta.url), "utf8");
+  assert.match(deployer, /dueviaRecoveryMultisigBytecode/);
+  assert.match(deployer, /dueviaObserverQuorumBytecode/);
+  assert.match(deployer, /new Set\(normalized\)\.size === 3/);
+  assert.match(deployer, /independenceConfirmed/);
+  assert.match(deployer, /"transferOwnership"/);
+  assert.match(deployer, /"acceptOwnership"/);
+  assert.match(deployer, /authorizedAttestors/);
+  assert.match(deployer, /bootstrapOperator/);
+  assert.match(deployer, /eth_chainId/);
+  assert.match(deployer, /0x7a0/);
+});
+
 test("the receivables pool gates real value-bearing deposits", async () => {
   const contract = await readFile(new URL("../contracts/DueviaReceivablesPool.sol", import.meta.url), "utf8");
   assert.match(contract, /function deposit\(bytes32 attestationId\) external payable/);
