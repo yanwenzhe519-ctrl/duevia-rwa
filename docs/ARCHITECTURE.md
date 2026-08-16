@@ -2,6 +2,12 @@
 
 Duevia separates evidence ingestion, deterministic policy, AI explanation, and onchain enforcement.
 
+The live runtime has three independent planes:
+
+1. **Observation plane**: a bounded X Layer JSON-RPC scanner discovers Duevia protocol events across all emitting addresses; registered project endpoints and public reporting provide independent offchain signals.
+2. **Recovery plane**: D1 stores observations, scan cursors, incidents, and replay keys. A five-minute Keeper advances the scan. Workers AI explains evidence while deterministic Watchdog and reconstruction engines decide state and balances.
+3. **Enforcement plane**: Registry + Recovery Coordinator + Continuity Guard + Continuity Pool require both asset eligibility and a verified incident before accepting capital.
+
 1. Duevia monitors discoverable X Layer RWA pools and public/onchain signals. A servicer adapter may also emit a signed `duevia.servicer-feed/v1` snapshot; it is a baseline, not a dependency after outage.
 2. `POST /api/servicer-feed` verifies the schema, HMAC signature, freshness, and replay key.
 3. The portfolio engine computes the authoritative `VERIFIED`, `MANUAL REVIEW`, or `SUSPENDED` state.
@@ -12,6 +18,8 @@ Duevia separates evidence ingestion, deterministic policy, AI explanation, and o
 8. `DueviaReceivablesPool` proves the enforcement boundary with payable testnet OKB deposits: suspended attestations revert, verified attestations accept value.
 
 `DueviaRecoveryCoordinator` adds the failure-management layer missing from ordinary attestation registries. It models `SUSPENDED -> RECONSTRUCTED/REVIEW/RESTRUCTURING -> VERIFIED -> CLOSED`, records the recovery capsule root, names an authorized successor, and exposes `isCapitalFlowAllowed(incidentId)`. This is based on recurring RWA incident mechanisms: stop new lending, preserve the last trusted state, run independent recovery/collection, require governance or successor approval, and only then restore eligibility.
+
+`DueviaObserverQuorum` prevents one monitoring process from unilaterally executing an incident action. `DueviaRecoveryMultisig` separates operational automation from exceptional recovery authority. The Keeper never possesses the power to declare legal ownership, absorb a loss, or approve restructuring terms.
 
 Continuity is a two-phase state transition. An outage first publishes `SUSPENDED`. A successor may later publish a new `VERIFIED` attestation linked through `previousAttestation`. The interface does not display `RESTORED` until the second transaction has been submitted successfully.
 

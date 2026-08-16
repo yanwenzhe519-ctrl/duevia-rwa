@@ -14,6 +14,9 @@ Duevia RWA is asset assurance infrastructure for tokenized private markets. It t
 - A contract design in which an asset must have a valid Duevia attestation before an integrated pool or mint flow can accept it.
 - A value-bearing receivables pool whose native-token deposits revert unless the referenced attestation is currently eligible.
 - A recovery coordinator state machine for real servicing failures: suspend, reconstruct, review/restructure, successor-verify, and close.
+- A chain-wide X Layer event scanner for Duevia protocol signatures, backed by persistent D1 observations and a five-minute Keeper.
+- Live Cloudflare Workers AI for grounded incident analysis plus GDELT/Google News and independent endpoint observations.
+- Versioned dual enforcement contracts requiring both an eligible attestation and a verified incident before accepting value.
 
 ## Product surfaces
 
@@ -21,6 +24,8 @@ Duevia RWA is asset assurance infrastructure for tokenized private markets. It t
 - `/app` — interactive asset-assurance workspace.
 
 The current browser demo accepts structured JSON so results stay deterministic and no raw evidence is uploaded to a third party. PDF, CSV, accounting, banking, and registry connectors are deliberate next-stage inputs rather than simulated live integrations.
+
+The deployed Worker is no longer process-memory-only. `WATCHDOG_DB` stores scanner cursors, independent observations, incidents, registered projects, and Keeper history. A Cron trigger scans X Layer every five minutes. `GET /api/watchdog` exposes the public audit state, `GET /api/discovery` performs bounded RPC discovery, and `GET /api/intelligence?q=...` queries public reporting. External watchdog writes require either the private administrator token or an allowlisted observer-wallet signature with replay protection.
 
 The canonical adapter boundary is `duevia.servicer-feed/v1`: a signed snapshot envelope containing `poolId`, `capturedAt`, heartbeat state, asset rows, and payment rows. ERP, bank, and servicer adapters can normalize into this format while the same policy engine evaluates every source. See `lib/servicer-feed.mjs` for the validation contract.
 
@@ -47,7 +52,7 @@ npm install
 npm run dev
 ```
 
-The AI panel works without credentials using a deterministic, clearly-labelled fallback. To enable model-grounded recovery plans, configure the server environment (never expose these values as `NEXT_PUBLIC_*`):
+The public deployment uses Cloudflare Workers AI (`@cf/meta/llama-3.3-70b-instruct-fp8-fast`) through the server-side `AI` binding. Local development can still use an OpenAI-compatible connector by configuring the server environment (never expose these values as `NEXT_PUBLIC_*`):
 
 ### What recovery actually produces
 
@@ -61,6 +66,16 @@ OPENAI_BASE_URL=https://api.openai.com/v1
 ```
 
 The `/api/agent` endpoint validates and bounds input, disables provider-side storage, times out after 15 seconds, and returns a fallback status when the connector is unavailable. Raw borrower data should not be sent to it; pass only the structured evidence needed for the decision.
+
+## Autonomous infrastructure contracts
+
+- `DueviaRecoveryCoordinator`: incident lifecycle and successor handoff.
+- `DueviaContinuityGuard`: requires both Registry eligibility and Coordinator verification.
+- `DueviaContinuityPool`: value-bearing reference pool protected by the dual guard.
+- `DueviaObserverQuorum`: requires matching reports from at least two independent observers before executing a recovery action.
+- `DueviaRecoveryMultisig`: transparent testnet recovery approvals; production should use a reviewed Safe-compatible multisig.
+
+The Monitoring tab deploys Coordinator, Dual Guard, and Continuity Pool through the canonical CREATE2 factory using the connected X Layer wallet. Deployment still requires explicit wallet confirmation; no private key is stored by Duevia.
 
 ### Connecting a real servicer source
 

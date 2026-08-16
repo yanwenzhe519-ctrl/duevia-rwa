@@ -22,7 +22,13 @@ const localBindingConfig = {
           database_id: SITE_CREATOR_PLACEHOLDER_DATABASE_ID,
         },
       ]
-    : [],
+    : [
+        {
+          binding: "WATCHDOG_DB",
+          database_name: "duevia-watchdog",
+          database_id: "5ea7ff98-45e0-43a2-a3a6-e924f4e3a943",
+        },
+      ],
   r2_buckets: r2
     ? [
         {
@@ -31,6 +37,8 @@ const localBindingConfig = {
         },
       ]
     : [],
+  triggers: { crons: ["*/5 * * * *"] },
+  ai: { binding: "AI" },
 };
 
 export default defineConfig(async () => {

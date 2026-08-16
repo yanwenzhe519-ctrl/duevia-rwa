@@ -71,6 +71,23 @@ test("recovery coordinator preserves the real-world failure lifecycle", async ()
   assert.match(contract, /function isCapitalFlowAllowed\(bytes32 incidentId\) external view returns \(bool\)/);
 });
 
+test("continuity guard and pool require asset and incident eligibility together", async () => {
+  const guard = await readFile(new URL("../contracts/DueviaContinuityGuard.sol", import.meta.url), "utf8");
+  const pool = await readFile(new URL("../contracts/DueviaContinuityPool.sol", import.meta.url), "utf8");
+  assert.match(guard, /registry\.isEligible\(attestationId, minimumScore\)/);
+  assert.match(guard, /coordinator\.isCapitalFlowAllowed\(incidentId\)/);
+  assert.match(pool, /guard\.requireOperational\(attestationId, incidentId\)/);
+});
+
+test("independent observer quorum and multisig gate exceptional recovery actions", async () => {
+  const quorum = await readFile(new URL("../contracts/DueviaObserverQuorum.sol", import.meta.url), "utf8");
+  const multisig = await readFile(new URL("../contracts/DueviaRecoveryMultisig.sol", import.meta.url), "utf8");
+  assert.match(quorum, /threshold_ < 2/);
+  assert.match(quorum, /votes\[id\] < threshold/);
+  assert.match(multisig, /approvals\[txHash\] < threshold/);
+  assert.match(multisig, /keccak256\(abi\.encode\(block\.chainid, address\(this\)/);
+});
+
 test("the receivables pool gates real value-bearing deposits", async () => {
   const contract = await readFile(new URL("../contracts/DueviaReceivablesPool.sol", import.meta.url), "utf8");
   assert.match(contract, /function deposit\(bytes32 attestationId\) external payable/);

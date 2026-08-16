@@ -11,6 +11,16 @@
 
 Duevia is not a dashboard that asks a failed servicer for another upload. It is an X Layer continuity layer: independent observations trigger a deterministic incident state, the AI produces a `duevia.recovery-capsule/v1`, and a successor can only reopen capital flows after the recovery root and authorization are recorded. `DueviaRecoveryCoordinator` models `SUSPENDED`, `RECONSTRUCTED`, `REVIEW`, `RESTRUCTURING`, `VERIFIED`, and `CLOSED` so a default or servicing outage has an explicit onchain lifecycle.
 
+Live infrastructure evidence:
+
+- Persistent D1 database: `duevia-watchdog`
+- Keeper schedule: every five minutes
+- X Layer scanner: chain ID `1952`, real `eth_blockNumber` and chunked `eth_getLogs`
+- Scanner replay proof: the existing 1 wei Pool deposit is independently decoded from transaction `0xe525...f9a77`
+- Live model: Cloudflare Workers AI `@cf/meta/llama-3.3-70b-instruct-fp8-fast`
+- Public intelligence adapters: GDELT DOC 2.0 with Google News RSS fallback
+- External observer writes: allowlist, wallet signature, and nonce replay protection
+
 ## Existing onchain evidence
 
 - Registry: `0xaa747b92496f6c5f01b9a32d8108da797c85a8c2`
