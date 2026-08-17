@@ -100,6 +100,8 @@ Then send the signed JSON to `POST /api/servicer-feed`. The Worker persists a re
 
 ## Testnet deployment
 
+The final six-contract deployment, governance transactions, live release provenance, and the distinction between historical and final-stack rehearsal evidence are published at [`/proof`](https://duevia-rwa.cardrevive-agent.workers.dev/proof) and [`/api/evidence`](https://duevia-rwa.cardrevive-agent.workers.dev/api/evidence). The evidence API reports the exact Git commit, frontend release, Cloudflare Worker Version ID, and deployment timestamp for the live build.
+
 The DApp can deploy a personal `DueviaAssetAssuranceRegistry` from the **Deploy Duevia registry** action. Obtain test OKB from the [X Layer faucet](https://web3.okx.com/xlayer/faucet), switch the wallet to chain `1952`, and keep the resulting registry address in the browser session or set `NEXT_PUBLIC_DUEVIA_REGISTRY_ADDRESS` for a shared environment. Verify deployment and attestations on [OKLink X Layer Testnet](https://www.oklink.com/x-layer-testnet).
 
 For production, use a separately reviewed deployment process and a multisig/role-managed attestor. The included registry is an MVP reference contract and has not undergone an independent security audit.

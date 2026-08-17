@@ -158,12 +158,15 @@ test("servicer route uses independent represented supply", async () => {
 });
 
 test("the deployed worker includes durable operations hardening", async () => {
-  const [worker, migration, operationsRunbook, securityReview, viteConfig] = await Promise.all([
+  const [worker, migration, operationsRunbook, securityReview, viteConfig, proof, releaseProof, failoverWorkflow] = await Promise.all([
     readFile(new URL("../worker/index.ts", import.meta.url), "utf8"),
     readFile(new URL("../drizzle/0007_operations_hardening.sql", import.meta.url), "utf8"),
     readFile(new URL("../docs/OPERATIONS_RUNBOOK.md", import.meta.url), "utf8"),
     readFile(new URL("../docs/SECURITY_REVIEW.md", import.meta.url), "utf8"),
     readFile(new URL("../vite.config.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/proof/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/proof/release-proof.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../.github/workflows/failover-keeper.yml", import.meta.url), "utf8"),
   ]);
   assert.match(worker, /\/api\/operations\/health/);
   assert.match(worker, /observer_endpoints_json/);
@@ -178,11 +181,19 @@ test("the deployed worker includes durable operations hardening", async () => {
   assert.match(worker, /account\.signMessage/);
   assert.match(worker, /service-observer:/);
   assert.match(worker, /evidenceApi/);
-  assert.match(worker, /duevia\.evidence\/v1/);
+  assert.match(worker, /duevia\.evidence\/v2/);
+  assert.match(worker, /DUEVIA_GIT_COMMIT/);
+  assert.match(worker, /CF_VERSION_METADATA/);
   assert.match(migration, /CREATE TABLE IF NOT EXISTS servicer_feed_receipts/);
   assert.match(migration, /ADD COLUMN observer_endpoints_json/);
   assert.match(migration, /ADD COLUMN trigger_source/);
   assert.match(operationsRunbook, /Keeper/);
   assert.match(securityReview, /independent audit/i);
   assert.match(viteConfig, /database_name:\s*["']duevia-watchdog["'][\s\S]*?migrations_dir:\s*["']\.\/drizzle["']/);
+  assert.match(viteConfig, /version_metadata/);
+  assert.match(proof, /all six final X Layer Testnet contracts/);
+  assert.doesNotMatch(proof, /Deploy the latest Recovery Coordinator/);
+  assert.match(releaseProof, /Live deployment provenance/);
+  assert.match(failoverWorkflow, /github-actions-failover/);
+  assert.match(failoverWorkflow, /DUEVIA_KEEPER_TOKEN/);
 });

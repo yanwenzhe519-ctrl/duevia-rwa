@@ -41,6 +41,7 @@ const localBindingConfig = {
     : [],
   triggers: { crons: ["*/5 * * * *"] },
   ai: { binding: "AI" },
+  version_metadata: { binding: "CF_VERSION_METADATA" },
 };
 
 export default defineConfig(async () => {

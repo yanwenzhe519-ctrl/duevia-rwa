@@ -14,6 +14,7 @@ import { evaluateOperationsHealth } from "../lib/operations-health.mjs";
 import { parseServicerFeed, servicerFeedStatus } from "../lib/servicer-feed.mjs";
 import { verifyServicerFeedSignature } from "../lib/servicer-feed-security.mjs";
 import { analyzePortfolio } from "../lib/portfolio-engine.mjs";
+import { dueviaContracts, dueviaGovernanceTransactions, dueviaProject, dueviaRelease, legacyRehearsalTransactions } from "../lib/deployment-evidence";
 
 interface Env {
   ASSETS: Fetcher;
@@ -23,6 +24,10 @@ interface Env {
   WATCHDOG_ADMIN_TOKEN?: string;
   WATCHDOG_OBSERVER_ADDRESSES?: string;
   DUEVIA_OBSERVER_PRIVATE_KEY?: `0x${string}`;
+  DUEVIA_GIT_COMMIT?: string;
+  DUEVIA_DEPLOYED_AT?: string;
+  DUEVIA_RELEASE?: string;
+  CF_VERSION_METADATA?: { id?: string; tag?: string; timestamp?: string };
   SERVICER_FEED_HMAC_SECRET?: string;
   AI: { run(model: string, input: Record<string, unknown>): Promise<Record<string, unknown>> };
   IMAGES: {
@@ -291,13 +296,48 @@ async function recoveryApi(request: Request, env: Env) {
 }
 
 async function evidenceApi(env: Env) {
-  const [projects, incidents, capsules, runs] = await Promise.all([
-    env.WATCHDOG_DB.prepare("SELECT pool_id, servicer_id, contract_address, coordinator_address, registry_address, last_state, consecutive_outage_runs, updated_at FROM projects ORDER BY updated_at DESC LIMIT 50").all(),
-    env.WATCHDOG_DB.prepare("SELECT incident_id, pool_id, state, opened_at, updated_at, recovery_root FROM incidents ORDER BY updated_at DESC LIMIT 50").all(),
-    env.WATCHDOG_DB.prepare("SELECT recovery_root, incident_id, pool_id, state, created_at FROM recovery_capsules ORDER BY created_at DESC LIMIT 50").all(),
-    env.WATCHDOG_DB.prepare("SELECT run_id, started_at, finished_at, from_block, to_block, observations, status, trigger_source FROM keeper_runs ORDER BY started_at DESC LIMIT 20").all(),
-  ]);
-  return Response.json({ ok: true, schema: "duevia.evidence/v1", generatedAt: new Date().toISOString(), chainId: 1952, projects: projects.results, incidents: incidents.results, recoveryCapsules: capsules.results, keeperRuns: runs.results }, { headers: { "Cache-Control": "no-store" } });
+  let projects: unknown[] = [];
+  let incidents: unknown[] = [];
+  let recoveryCapsules: unknown[] = [];
+  let keeperRuns: unknown[] = [];
+  let runtimeEvidenceAvailable = true;
+  try {
+    const results = await Promise.all([
+      env.WATCHDOG_DB.prepare("SELECT pool_id, servicer_id, contract_address, coordinator_address, registry_address, last_state, consecutive_outage_runs, updated_at FROM projects ORDER BY updated_at DESC LIMIT 50").all(),
+      env.WATCHDOG_DB.prepare("SELECT incident_id, pool_id, state, opened_at, updated_at, recovery_root FROM incidents ORDER BY updated_at DESC LIMIT 50").all(),
+      env.WATCHDOG_DB.prepare("SELECT recovery_root, incident_id, pool_id, state, created_at FROM recovery_capsules ORDER BY created_at DESC LIMIT 50").all(),
+      env.WATCHDOG_DB.prepare("SELECT run_id, started_at, finished_at, from_block, to_block, observations, status, trigger_source FROM keeper_runs ORDER BY started_at DESC LIMIT 20").all(),
+    ]);
+    projects = results[0].results;
+    incidents = results[1].results;
+    recoveryCapsules = results[2].results;
+    keeperRuns = results[3].results;
+  } catch {
+    runtimeEvidenceAvailable = false;
+  }
+  return Response.json({
+    ok: true,
+    schema: "duevia.evidence/v2",
+    generatedAt: new Date().toISOString(),
+    chainId: 1952,
+    release: {
+      name: env.DUEVIA_RELEASE || dueviaRelease,
+      gitCommit: env.DUEVIA_GIT_COMMIT || "unknown",
+      frontendVersion: env.DUEVIA_GIT_COMMIT || "unknown",
+      deployedAt: env.DUEVIA_DEPLOYED_AT || env.CF_VERSION_METADATA?.timestamp || null,
+      workerVersion: env.CF_VERSION_METADATA?.id || null,
+      workerTag: env.CF_VERSION_METADATA?.tag || null,
+    },
+    project: dueviaProject,
+    contracts: dueviaContracts,
+    governanceTransactions: dueviaGovernanceTransactions,
+    legacyRehearsalTransactions,
+    runtimeEvidenceAvailable,
+    projects,
+    incidents,
+    recoveryCapsules,
+    keeperRuns,
+  }, { headers: { "Cache-Control": "no-store" } });
 }
 
 async function watchdogApi(request: Request, env: Env) {
