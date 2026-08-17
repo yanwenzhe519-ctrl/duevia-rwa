@@ -68,8 +68,12 @@ test("continuity recovery requires linked suspended and verified attestations", 
     readFile(new URL("../app/app/xray-workspace.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/app/continuity-agent.tsx", import.meta.url), "utf8"),
   ]);
-  assert.match(workspace, /publishContinuityState\(4\)/);
-  assert.match(workspace, /publishContinuityState\(1, previous as Hex\)/);
+  assert.match(workspace, /publishContinuitySuspended/);
+  assert.match(workspace, /publishContinuityVerified/);
+  assert.match(workspace, /openProjectIncident/);
+  assert.match(workspace, /verifyProjectSuccessor/);
+  assert.match(workspace, /publishProjectAttestation/);
+  assert.match(workspace, /duevia:xlayer-demo-rwa:v3/);
   assert.match(workspace, /previousAttestation/);
   assert.match(continuity, /Publish SUSPENDED/);
   assert.match(continuity, /Publish successor VERIFIED/);

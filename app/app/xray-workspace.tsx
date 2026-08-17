@@ -8,10 +8,12 @@ import { demoCase } from "@/lib/demo-case.mjs";
 import { dueviaRegistryAbi, dueviaRegistryBytecode } from "@/lib/duevia-registry-artifact";
 import { dueviaGuardAbi, dueviaGuardBytecode } from "@/lib/duevia-guard-artifact";
 import { dueviaPoolAbi, dueviaPoolBytecode } from "@/lib/duevia-pool-artifact";
+import { dueviaRecoveryAbi } from "@/lib/duevia-recovery-artifact";
+import { dueviaContinuityPoolAbi } from "@/lib/duevia-continuity-pool-artifact";
 import { analyzePortfolio, parseAssetTapeCsv, parsePaymentsCsv } from "@/lib/portfolio-engine.mjs";
 import { portfolioDemo } from "@/lib/portfolio-demo.mjs";
 import AiInvestigator from "./ai-investigator";
-import ContinuityAgent from "./continuity-agent";
+import ContinuityAgent, { type SuspensionResult, type VerificationResult } from "./continuity-agent";
 import InfrastructureDeployer from "./infrastructure-deployer";
 
 type EthereumProvider = { request(args: { method: string; params?: unknown[] | Record<string, unknown> }): Promise<unknown> };
@@ -36,6 +38,9 @@ const xLayerTestnet = {
 } as const;
 const zeroHash = `0x${"0".repeat(64)}` as Hex;
 const create2Factory = "0x4e59b44847b379578588920cA78FbF26c0B4956C" as Address;
+const dueviaProjectId = keccak256(stringToHex("duevia:xlayer-demo-rwa:v3"));
+const finalCoordinatorAddress = "0x87d000cF49Ca890106BB259257bd5d1b186605cA" as Address;
+const finalContinuityPoolAddress = "0xCEC40281682fFd279d8414b828C40d7811F737c4" as Address;
 const registrySalt = `0x00b9183caf97239c103763505f21f5029578dad4e37bbeb8b296d6cb8bfe520c` as Hex;
 const guardSalt = `0x4d554152445f47554152445f56315f585f4c415945525f544553544e45540000` as Hex;
 const poolSalt = `0x4455455649415f504f4f4c5f56315f585f4c415945525f544553544e45540000` as Hex;
@@ -340,8 +345,8 @@ export default function DueviaWorkspace() {
       const status = report.status === "verified" ? 1 : report.status === "review" ? 2 : 4;
       const data = encodeFunctionData({
         abi: dueviaRegistryAbi,
-        functionName: "publishAttestation",
-        args: [assetId, attestationId, proofHash as Hex, policyHash, zeroHash, BigInt(validUntil), report.score, status],
+        functionName: "publishProjectAttestation",
+        args: [dueviaProjectId, assetId, attestationId, proofHash as Hex, policyHash, zeroHash, BigInt(validUntil), report.score, status],
       });
       setNotice("Requesting wallet signature to publish the asset attestation on X Layer…");
       const client = createWalletClient({ chain: xLayerTestnet, transport: custom(window.ethereum) });
@@ -437,8 +442,8 @@ export default function DueviaWorkspace() {
       const validUntil = BigInt(Math.floor((Date.now() + 7 * 86_400_000) / 1000));
       const data = encodeFunctionData({
         abi: dueviaRegistryAbi,
-        functionName: "publishAttestation",
-        args: [poolId, attestationId, portfolioProofHash as Hex, policyHash, zeroHash, validUntil, score, status],
+        functionName: "publishProjectAttestation",
+        args: [dueviaProjectId, poolId, attestationId, portfolioProofHash as Hex, policyHash, zeroHash, validUntil, score, status],
       });
       setNotice("Requesting wallet signature for the portfolio-state attestation...");
       const client = createWalletClient({ chain: xLayerTestnet, transport: custom(window.ethereum) });
@@ -450,24 +455,70 @@ export default function DueviaWorkspace() {
     }
   };
 
-  const publishContinuityState = async (status: 1 | 4, previousAttestation: Hex = zeroHash, recoveryRoot?: string) => {
+  const continuityContext = async () => {
     if (!window.ethereum || !wallet || !registryAddress || !isAddress(registryAddress)) throw new Error("Wallet and registry required");
+    const accounts = await window.ethereum.request({ method: "eth_accounts" }) as string[];
+    if (!accounts[0] || accounts[0].toLowerCase() !== wallet.toLowerCase()) throw new Error("Reconnect the active governance wallet in Duevia");
+    const client = createWalletClient({ chain: xLayerTestnet, transport: custom(window.ethereum) });
+    const publicClient = createPublicClient({ chain: xLayerTestnet, transport: http("https://testrpc.xlayer.tech") });
+    const send = async (to: Address, data: Hex, value?: bigint) => {
+      const hash = await client.sendTransaction({ account: wallet as Address, to, data, value });
+      const receipt = await publicClient.waitForTransactionReceipt({ hash });
+      if (receipt.status !== "success") throw new Error(`Transaction ${hash} reverted`);
+      return { hash, blockNumber: receipt.blockNumber.toString() };
+    };
+    return { account: wallet as Address, publicClient, send };
+  };
+
+  const publishContinuitySuspended = async (recoveryRoot?: string): Promise<SuspensionResult> => {
+    const { account, publicClient, send } = await continuityContext();
     const assetId = keccak256(stringToHex("duevia:pool:continuity-demo"));
-    const evidenceRoot = await fingerprint({ status: status === 4 ? "suspended" : "verified", predecessor: previousAttestation, portfolio: portfolioReport });
+    const evidenceRoot = await fingerprint({ status: "suspended", portfolio: portfolioReport });
     const continuityRoot: Hex = recoveryRoot && /^0x[0-9a-fA-F]{64}$/.test(recoveryRoot) ? recoveryRoot as Hex : evidenceRoot as Hex;
-    const attestationId = keccak256(stringToHex(`duevia:continuity:${status}:${continuityRoot}:${Date.now()}`));
+    const runId = Date.now();
+    const attestationId = keccak256(stringToHex(`duevia:continuity:4:${continuityRoot}:${runId}`));
+    const incidentId = keccak256(stringToHex(`duevia:incident:${attestationId}`));
     const policyHash = keccak256(stringToHex("DUEVIA_CONTINUITY_FAILOVER_V1"));
     const validUntil = BigInt(Math.floor((Date.now() + 7 * 86_400_000) / 1000));
-    const data = encodeFunctionData({
+    const registryTx = await send(registryAddress as Address, encodeFunctionData({
       abi: dueviaRegistryAbi,
-      functionName: "publishAttestation",
-      args: [assetId, attestationId, continuityRoot, policyHash, previousAttestation, validUntil, status === 4 ? 0 : 92, status],
-    });
-    const client = createWalletClient({ chain: xLayerTestnet, transport: custom(window.ethereum) });
-    const hash = await client.sendTransaction({ account: wallet as Address, to: registryAddress as Address, data });
-    setAnchorTx(hash);
-    setNotice(`Continuity ${status === 4 ? "SUSPENDED" : "VERIFIED"} attestation submitted: ${shortAddress(hash)}`);
-    return attestationId;
+      functionName: "publishProjectAttestation",
+      args: [dueviaProjectId, assetId, attestationId, continuityRoot, policyHash, zeroHash, validUntil, 0, 4],
+    }));
+    const servicerId = keccak256(stringToHex("duevia:servicer:primary-demo"));
+    const lastTrustedAt = BigInt(Math.floor(Date.now() / 1000) - 72 * 3600);
+    const coordinatorTx = await send(finalCoordinatorAddress, encodeFunctionData({ abi: dueviaRecoveryAbi, functionName: "openProjectIncident", args: [dueviaProjectId, incidentId, assetId, servicerId, zeroHash, lastTrustedAt] }));
+    let poolBlocked = false;
+    try {
+      await publicClient.simulateContract({ account, address: finalContinuityPoolAddress, abi: dueviaContinuityPoolAbi, functionName: "deposit", args: [attestationId, incidentId], value: BigInt(1) });
+    } catch { poolBlocked = true; }
+    if (!poolBlocked) throw new Error("Pool accepted a SUSPENDED incident");
+    const evidence = { projectId: dueviaProjectId, incidentId, recoveryRoot: continuityRoot, suspendedAttestationId: attestationId, suspendedRegistry: registryTx, incidentOpened: coordinatorTx, suspendedPoolBlocked: true };
+    localStorage.setItem("duevia-latest-chain-rehearsal", JSON.stringify(evidence));
+    setAnchorTx(coordinatorTx.hash);
+    return { attestationId, incidentId, registryTransactionHash: registryTx.hash, coordinatorTransactionHash: coordinatorTx.hash, poolBlocked };
+  };
+
+  const publishContinuityVerified = async (previousAttestation: string, incidentId: string, recoveryRoot?: string): Promise<VerificationResult> => {
+    if (!/^0x[0-9a-fA-F]{64}$/.test(previousAttestation) || !/^0x[0-9a-fA-F]{64}$/.test(incidentId)) throw new Error("Invalid suspended rehearsal identifiers");
+    const { account, publicClient, send } = await continuityContext();
+    const prior = JSON.parse(localStorage.getItem("duevia-latest-chain-rehearsal") || "{}") as Record<string, unknown>;
+    const root: Hex = recoveryRoot && /^0x[0-9a-fA-F]{64}$/.test(recoveryRoot) ? recoveryRoot as Hex : String(prior.recoveryRoot || zeroHash) as Hex;
+    if (root === zeroHash) throw new Error("Recovery Root is required");
+    const recoveryTx = await send(finalCoordinatorAddress, encodeFunctionData({ abi: dueviaRecoveryAbi, functionName: "recordProjectRecovery", args: [dueviaProjectId, incidentId as Hex, root, 2] }));
+    const successorTx = await send(finalCoordinatorAddress, encodeFunctionData({ abi: dueviaRecoveryAbi, functionName: "proposeProjectSuccessor", args: [dueviaProjectId, incidentId as Hex, account] }));
+    const assetId = keccak256(stringToHex("duevia:pool:continuity-demo"));
+    const policyHash = keccak256(stringToHex("DUEVIA_CONTINUITY_FAILOVER_V1"));
+    const attestationId = keccak256(stringToHex(`duevia:continuity:1:${root}:${Date.now()}`));
+    const validUntil = BigInt(Math.floor((Date.now() + 7 * 86_400_000) / 1000));
+    const registryTx = await send(registryAddress as Address, encodeFunctionData({ abi: dueviaRegistryAbi, functionName: "publishProjectAttestation", args: [dueviaProjectId, assetId, attestationId, root, policyHash, previousAttestation as Hex, validUntil, 92, 1] }));
+    const verificationTx = await send(finalCoordinatorAddress, encodeFunctionData({ abi: dueviaRecoveryAbi, functionName: "verifyProjectSuccessor", args: [dueviaProjectId, incidentId as Hex, attestationId] }));
+    await publicClient.simulateContract({ account, address: finalContinuityPoolAddress, abi: dueviaContinuityPoolAbi, functionName: "deposit", args: [attestationId, incidentId as Hex], value: BigInt(1) });
+    const poolTx = await send(finalContinuityPoolAddress, encodeFunctionData({ abi: dueviaContinuityPoolAbi, functionName: "deposit", args: [attestationId, incidentId as Hex] }), BigInt(1));
+    const evidence = { ...prior, verifiedAttestationId: attestationId, recoveryRecorded: recoveryTx, successorProposed: successorTx, verifiedRegistry: registryTx, successorVerified: verificationTx, verifiedPoolDeposit: poolTx };
+    localStorage.setItem("duevia-latest-chain-rehearsal", JSON.stringify(evidence));
+    setAnchorTx(poolTx.hash);
+    return { attestationId, recoveryTransactionHash: recoveryTx.hash, successorTransactionHash: successorTx.hash, registryTransactionHash: registryTx.hash, verificationTransactionHash: verificationTx.hash, poolTransactionHash: poolTx.hash };
   };
 
   const validUntil = report.validUntil ? new Date(report.validUntil).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" }) : "Not set";
@@ -485,8 +536,7 @@ export default function DueviaWorkspace() {
       <header className="app-topbar"><div><span>ASSET / {report.caseId}</span><h1>{report.assetName}</h1></div><div className="app-actions"><button className="ghost-action" type="button" onClick={downloadReport}>Export attestation</button><button className="wallet-action" type="button" onClick={connectWallet}>{wallet ? shortAddress(wallet) : "Connect wallet"}</button></div></header>
       <nav className="workspace-tabs" aria-label="Asset views">{tabs.map((item) => <button key={item} type="button" className={tab === item ? "active" : ""} onClick={() => setTab(item)}>{item}</button>)}</nav>
       <div className="app-content">
-        {/* Continuity transitions: publishContinuityState(4) then publishContinuityState(1, previous as Hex), carrying the recovery root. */}
-        {tab === "Continuity Agent" && <ContinuityAgent onPublishSuspended={(root) => publishContinuityState(4, zeroHash, root)} onPublishVerified={(previous, root) => publishContinuityState(1, previous as Hex, root)} />}
+        {tab === "Continuity Agent" && <ContinuityAgent onPublishSuspended={publishContinuitySuspended} onPublishVerified={publishContinuityVerified} />}
         {tab === "AI Investigator" && <AiInvestigator report={portfolioReport} sourceName={portfolioSource} onOpenPortfolio={() => setTab("Portfolio controls")} />}
         {tab === "Portfolio controls" && <section className="portfolio-view">
           <div className="detail-heading portfolio-heading"><div><span>POLICY & EXECUTION</span><h2>{portfolioReport.poolName}</h2><p>The AI investigation layer resolves signals here into transparent eligibility controls and an executable pool state.</p></div><button className="ghost-action" type="button" onClick={() => setTab("AI Investigator")}>← Back to AI Investigator</button></div>
