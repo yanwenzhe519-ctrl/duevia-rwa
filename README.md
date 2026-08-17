@@ -25,9 +25,13 @@ Duevia RWA is asset assurance infrastructure for tokenized private markets. It t
 
 The current browser demo accepts structured JSON so results stay deterministic and no raw evidence is uploaded to a third party. PDF, CSV, accounting, banking, and registry connectors are deliberate next-stage inputs rather than simulated live integrations.
 
+Solidity security tests run with Foundry through `npm run contracts:test`. The suite covers role isolation, replay rejection, Coordinator state transitions, observer quorum, multisig approvals, Pool fail-closed behavior, and a randomized Pool solvency invariant. Foundry is pinned to `1.7.1` through platform-specific npm binaries.
+
 The deployed Worker is no longer process-memory-only. `WATCHDOG_DB` stores scanner cursors, independent observations, incident evaluations, incidents, Recovery Capsules, AI investigations, execution approvals, and Keeper history. A Cron trigger scans X Layer every five minutes. A D1 lease prevents overlapping Keeper runs. `GET /api/watchdog` exposes redacted public audit metadata; evidence bodies, Capsule contents, snapshots, and execution payloads require administrator authorization. External watchdog writes require either the private administrator token or an allowlisted observer-wallet signature with replay protection.
 
 The canonical baseline boundary is `duevia.servicer-feed/v1`: a signed snapshot envelope containing `poolId`, `capturedAt`, heartbeat state, asset rows, and payment rows. ERP, bank, and servicer adapters can normalize into this format while the same policy engine evaluates every source. Independent monitors use `duevia.observer-status/v1` with an allowlisted EVM signature, freshness limit, pool binding, evidence hash, and replay nonce. See `lib/servicer-feed.mjs` and `lib/observer-adapter.mjs`.
+
+The Worker also exposes `GET /api/observer/status?poolId=<pool>` as a continuously running operator observer. It reads persisted project state, signs a fresh `duevia.observer-status/v1` envelope, and stores the nonce in D1 before returning it. Configure `DUEVIA_OBSERVER_PRIVATE_KEY` as a Cloudflare Worker secret and add the derived public address to `WATCHDOG_OBSERVER_ADDRESSES`; without the secret the endpoint fails closed with HTTP 503. This operator observer is not an independent organization and must not be counted as one of the independent quorum observers.
 
 ## Onchain design
 

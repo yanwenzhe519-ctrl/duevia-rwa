@@ -4,6 +4,7 @@ import handler from "vinext/server/app-router-entry";
 import { evaluateWatchdog } from "../lib/continuity-watchdog.mjs";
 import { scanXLayer } from "../lib/xlayer-scanner.mjs";
 import { keccak256, stringToHex, verifyMessage } from "viem";
+import { privateKeyToAccount } from "viem/accounts";
 import { searchPublicIntelligence } from "../lib/public-intelligence.mjs";
 import { collectEvidenceIds, failedInvestigation, modelResponseObject, validateInvestigation, validateModelVerifier } from "../lib/ai-investigation.mjs";
 import { reconstructAssetState } from "../lib/reconstruction-engine.mjs";
@@ -21,6 +22,7 @@ interface Env {
   XLAYER_RPC_URL?: string;
   WATCHDOG_ADMIN_TOKEN?: string;
   WATCHDOG_OBSERVER_ADDRESSES?: string;
+  DUEVIA_OBSERVER_PRIVATE_KEY?: `0x${string}`;
   SERVICER_FEED_HMAC_SECRET?: string;
   AI: { run(model: string, input: Record<string, unknown>): Promise<Record<string, unknown>> };
   IMAGES: {
@@ -40,6 +42,27 @@ interface ExecutionContext {
 async function persistObservation(db: D1Database, observation: Record<string, unknown>) {
   await db.prepare("INSERT OR IGNORE INTO observations (observation_id, pool_id, source, kind, observed_at, block_number, transaction_hash, payload_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
     .bind(String(observation.observationId), observation.poolId ? String(observation.poolId) : null, String(observation.source || "unknown"), String(observation.event || observation.kind || "observation"), new Date().toISOString(), observation.blockNumber ? String(observation.blockNumber) : null, observation.transactionHash ? String(observation.transactionHash) : null, JSON.stringify(observation)).run();
+}
+
+async function observerStatusApi(request: Request, env: Env) {
+  if (request.method !== "GET") return new Response("Method Not Allowed", { status: 405 });
+  if (!env.DUEVIA_OBSERVER_PRIVATE_KEY || !/^0x[0-9a-fA-F]{64}$/.test(env.DUEVIA_OBSERVER_PRIVATE_KEY)) {
+    return Response.json({ ok: false, error: "Continuous observer signing key is not configured." }, { status: 503, headers: { "Cache-Control": "no-store" } });
+  }
+  const poolId = new URL(request.url).searchParams.get("poolId")?.trim() || "";
+  if (!poolId) return Response.json({ ok: false, error: "poolId query parameter is required." }, { status: 400 });
+  const project = await env.WATCHDOG_DB.prepare("SELECT pool_id, last_state, last_heartbeat_at, consecutive_outage_runs FROM projects WHERE pool_id = ? AND enabled = 1").bind(poolId).first<Record<string, unknown>>();
+  if (!project) return Response.json({ ok: false, error: "Registered project not found." }, { status: 404 });
+  const observedAt = new Date().toISOString();
+  const state = String(project.last_state || "HEALTHY").toUpperCase();
+  const status = state.includes("OUTAGE") || state.includes("SUSPENDED") ? "OUTAGE" : state.includes("DEGRADED") || Number(project.consecutive_outage_runs || 0) > 0 ? "DEGRADED" : "HEALTHY";
+  const evidenceHash = keccak256(stringToHex(JSON.stringify({ poolId, state, lastHeartbeatAt: project.last_heartbeat_at || null, consecutiveOutageRuns: Number(project.consecutive_outage_runs || 0) })));
+  const nonce = `observer:${Date.now()}:${crypto.randomUUID()}`;
+  const account = privateKeyToAccount(env.DUEVIA_OBSERVER_PRIVATE_KEY);
+  const message = `Duevia observer status\n${poolId}\n${observedAt}\n${status}\n${evidenceHash}\n${nonce}`;
+  const signature = await account.signMessage({ message });
+  await persistObservation(env.WATCHDOG_DB, { observationId: `service-observer:${poolId}:${nonce}`, poolId, source: `observer:${account.address.toLowerCase()}`, event: "ContinuousObserverStatus", observedAt, status, evidenceHash, nonce });
+  return Response.json({ ok: true, schema: "duevia.observer-status/v1", poolId, observer: account.address.toLowerCase(), observedAt, status, evidenceHash, nonce, signature }, { headers: { "Cache-Control": "no-store" } });
 }
 
 async function runKeeper(env: Env, triggerSource = "cloudflare-cron-primary") {
@@ -267,6 +290,16 @@ async function recoveryApi(request: Request, env: Env) {
   return Response.json({ ok: true, capsules: rows.results.map((row) => ({ recoveryRoot: row.recovery_root, incidentId: row.incident_id, poolId: row.pool_id, state: row.state, createdAt: row.created_at, ...(admin ? { capsule: JSON.parse(String(row.capsule_json || "{}")) } : {}) })) }, { headers: { "Cache-Control": "no-store" } });
 }
 
+async function evidenceApi(env: Env) {
+  const [projects, incidents, capsules, runs] = await Promise.all([
+    env.WATCHDOG_DB.prepare("SELECT pool_id, servicer_id, contract_address, coordinator_address, registry_address, last_state, consecutive_outage_runs, updated_at FROM projects ORDER BY updated_at DESC LIMIT 50").all(),
+    env.WATCHDOG_DB.prepare("SELECT incident_id, pool_id, state, opened_at, updated_at, recovery_root FROM incidents ORDER BY updated_at DESC LIMIT 50").all(),
+    env.WATCHDOG_DB.prepare("SELECT recovery_root, incident_id, pool_id, state, created_at FROM recovery_capsules ORDER BY created_at DESC LIMIT 50").all(),
+    env.WATCHDOG_DB.prepare("SELECT run_id, started_at, finished_at, from_block, to_block, observations, status, trigger_source FROM keeper_runs ORDER BY started_at DESC LIMIT 20").all(),
+  ]);
+  return Response.json({ ok: true, schema: "duevia.evidence/v1", generatedAt: new Date().toISOString(), chainId: 1952, projects: projects.results, incidents: incidents.results, recoveryCapsules: capsules.results, keeperRuns: runs.results }, { headers: { "Cache-Control": "no-store" } });
+}
+
 async function watchdogApi(request: Request, env: Env) {
   if (request.method === "GET") {
     const [incidents, runs, observations] = await Promise.all([
@@ -365,10 +398,12 @@ const worker = {
     const url = new URL(request.url);
 
     if (url.pathname === "/api/watchdog") return watchdogApi(request, env);
+    if (url.pathname === "/api/observer/status") return observerStatusApi(request, env);
     if (url.pathname === "/api/watchdog/projects") return projectsApi(request, env);
     if (url.pathname === "/api/operations/health" && request.method === "GET") return operationsHealthApi(env);
     if (url.pathname === "/api/servicer-feed") return servicerFeedApi(request, env);
     if (url.pathname === "/api/recovery" && request.method === "GET") return recoveryApi(request, env);
+    if (url.pathname === "/api/evidence" && request.method === "GET") return evidenceApi(env);
     if (url.pathname === "/api/execution") return executionApi(request, env);
     if (url.pathname === "/api/agent" && request.method === "POST") return aiApi(request, env);
     if (url.pathname === "/api/agent/health" && request.method === "GET") return Response.json({ ok: true, provider: "cloudflare-workers-ai", model: "@cf/meta/llama-3.3-70b-instruct-fp8-fast", mode: "model-grounded" }, { headers: { "Cache-Control": "no-store" } });

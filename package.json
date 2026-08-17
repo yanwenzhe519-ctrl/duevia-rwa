@@ -11,6 +11,7 @@
     "start": "set WRANGLER_LOG_PATH=.wrangler/wrangler.log&& vinext start",
     "typecheck": "tsc -p tsconfig.app.json --noEmit",
     "contracts:compile": "node scripts/compile-registry.mjs && node scripts/compile-guard.mjs && node scripts/compile-pool.mjs && node scripts/compile-recovery.mjs && node scripts/compile-continuity.mjs && node scripts/compile-governance.mjs",
+    "contracts:test": "node scripts/run-foundry-tests.mjs",
     "test": "npm run build && node --test tests/*.test.mjs",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next --ignore-pattern .wrangler",
     "bench:incidents": "node scripts/run-replay-benchmarks.mjs"
@@ -25,6 +26,10 @@
   "devDependencies": {
     "@cloudflare/vite-plugin": "1.52.1",
     "@eslint/js": "9.39.4",
+    "@foundry-rs/cast": "^1.7.1",
+    "@foundry-rs/cast-win32-amd64": "^1.7.1",
+    "@foundry-rs/forge": "^1.7.1",
+    "@foundry-rs/forge-win32-amd64": "^1.7.1",
     "@next/eslint-plugin-next": "16.2.6",
     "@tailwindcss/postcss": "4.2.1",
     "@types/node": "22.19.19",

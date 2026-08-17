@@ -15,11 +15,21 @@ declare global { interface Window { ethereum?: EthereumProvider } }
 const chain = { id: 1952, name: "X Layer Testnet", nativeCurrency: { name: "OKB", symbol: "OKB", decimals: 18 }, rpcUrls: { default: { http: ["https://testrpc.xlayer.tech"] } }, blockExplorers: { default: { name: "OKLink", url: "https://www.oklink.com/x-layer-testnet" } } } as const;
 const factory = "0x4e59b44847b379578588920cA78FbF26c0B4956C" as Address;
 const projectWallet = "0x05667de34ad47bafe8a8b976c19809cadf7719d2";
+const governanceWallets = [projectWallet, "0xcf4f92fbe73fb01de45cdc4e370126963c851b51", "0x0bfc04d69f2c407e1571a3582314cd66058cd29e"];
+const observerWallets = ["0x4b2b20213de88a66c2d2ba458733b8e599c93bad", "0x0cd03c1760b5b1c0ca0f065dc931ad3e86b730dd", "0x6431727d667d9dddea1df49e4627b7403f791f0a"];
+const demoProjectId = keccak256(stringToHex("duevia:xlayer-demo-rwa:v3"));
 const short = (value: string) => `${value.slice(0, 6)}…${value.slice(-4)}`;
 const publicClient = createPublicClient({ chain, transport: http("https://testrpc.xlayer.tech") });
 
 type DeploymentResult = { address: Address; transactionHash?: Hex; blockNumber?: bigint };
-type GovernanceAudit = { registryOwner: string; coordinatorOwner: string; bootstrapAttestor: boolean; bootstrapOperator: boolean };
+type GovernanceAudit = {
+  registryOwner: string;
+  coordinatorOwner: string;
+  registryProjectOwner: string;
+  coordinatorProjectOwner: string;
+  bootstrapAttestor: boolean;
+  bootstrapOperator: boolean;
+};
 
 async function activeAccount() {
   if (!window.ethereum) throw new Error("Wallet provider unavailable");
@@ -54,6 +64,32 @@ async function write(account: Address, address: Address, abi: readonly unknown[]
   return { hash, blockNumber: receipt.blockNumber };
 }
 
+async function ensureProjectConfiguration(account: Address, registryAddress: Address, coordinatorAddress: Address) {
+  const registryExists = await publicClient.readContract({ address: registryAddress, abi: dueviaRegistryAbi, functionName: "projectExists", args: [demoProjectId] });
+  const coordinatorExists = await publicClient.readContract({ address: coordinatorAddress, abi: dueviaRecoveryAbi, functionName: "projectExists", args: [demoProjectId] });
+  const current: Record<string, unknown> = JSON.parse(localStorage.getItem("duevia-final-testnet-evidence") || "{}");
+  current.projectId = demoProjectId;
+  if (!registryExists) {
+    const result = await write(account, registryAddress, dueviaRegistryAbi, "registerProject", [demoProjectId, account]);
+    current.registryProjectRegistration = { transactionHash: result.hash, blockNumber: result.blockNumber.toString() };
+  }
+  if (!coordinatorExists) {
+    const result = await write(account, coordinatorAddress, dueviaRecoveryAbi, "registerProject", [demoProjectId, account]);
+    current.coordinatorProjectRegistration = { transactionHash: result.hash, blockNumber: result.blockNumber.toString() };
+  }
+  const registryAttestor = await publicClient.readContract({ address: registryAddress, abi: dueviaRegistryAbi, functionName: "projectAttestors", args: [demoProjectId, account] });
+  if (!registryAttestor) {
+    const result = await write(account, registryAddress, dueviaRegistryAbi, "setProjectAttestor", [demoProjectId, account, true]);
+    current.registryProjectAttestor = { transactionHash: result.hash, blockNumber: result.blockNumber.toString() };
+  }
+  const coordinatorOperator = await publicClient.readContract({ address: coordinatorAddress, abi: dueviaRecoveryAbi, functionName: "projectOperators", args: [demoProjectId, account] });
+  if (!coordinatorOperator) {
+    const result = await write(account, coordinatorAddress, dueviaRecoveryAbi, "setProjectOperator", [demoProjectId, account, true]);
+    current.coordinatorProjectOperator = { transactionHash: result.hash, blockNumber: result.blockNumber.toString() };
+  }
+  localStorage.setItem("duevia-final-testnet-evidence", JSON.stringify(current));
+}
+
 function saveResult(label: string, result: DeploymentResult) {
   const current = JSON.parse(localStorage.getItem("duevia-final-testnet-evidence") || "{}") as Record<string, unknown>;
   current[label] = { address: result.address, transactionHash: result.transactionHash || null, blockNumber: result.blockNumber?.toString() || null };
@@ -66,8 +102,8 @@ export default function InfrastructureDeployer({ wallet, registryAddress }: { wa
   const [continuityPool, setContinuityPool] = useState("");
   const [multisig, setMultisig] = useState("");
   const [quorum, setQuorum] = useState("");
-  const [governance, setGovernance] = useState([projectWallet, "", ""]);
-  const [observers, setObservers] = useState(["", "", ""]);
+  const [governance, setGovernance] = useState(governanceWallets);
+  const [observers, setObservers] = useState(observerWallets);
   const [independenceConfirmed, setIndependenceConfirmed] = useState(false);
   const [notice, setNotice] = useState("Deploy the final recovery stack with the authorized project wallet.");
   const [running, setRunning] = useState(false);
@@ -90,11 +126,11 @@ export default function InfrastructureDeployer({ wallet, registryAddress }: { wa
   useEffect(() => {
     // Restore browser-owned deployment state after hydration.
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setCoordinator(localStorage.getItem("duevia-recovery-coordinator-v2") || "");
-    setContinuityGuard(localStorage.getItem("duevia-continuity-guard-v2") || "");
-    setContinuityPool(localStorage.getItem("duevia-continuity-pool-v2") || "");
-    setMultisig(localStorage.getItem("duevia-recovery-multisig-v2") || "");
-    setQuorum(localStorage.getItem("duevia-observer-quorum-v2") || "");
+    setCoordinator(localStorage.getItem("duevia-recovery-coordinator-v3") || "");
+    setContinuityGuard(localStorage.getItem("duevia-continuity-guard-v3") || "");
+    setContinuityPool(localStorage.getItem("duevia-continuity-pool-v3") || "");
+    setMultisig(localStorage.getItem("duevia-recovery-multisig-v3") || "");
+    setQuorum(localStorage.getItem("duevia-observer-quorum-v3") || "");
     const saved = JSON.parse(localStorage.getItem("duevia-governance-addresses") || "null") as unknown;
     if (Array.isArray(saved) && saved.length === 3 && saved.every((value) => typeof value === "string")) setGovernance(saved);
     const savedObservers = JSON.parse(localStorage.getItem("duevia-observer-addresses") || "null") as unknown;
@@ -117,12 +153,13 @@ export default function InfrastructureDeployer({ wallet, registryAddress }: { wa
       if (kind === "coordinator") result = await create2Deploy(account, dueviaRecoveryBytecode, dueviaRecoveryAbi, [account], "recovery-coordinator");
       else if (kind === "guard") {
         if (!isAddress(registryAddress) || !isAddress(coordinator)) throw new Error("Deploy Registry and Coordinator first");
-        result = await create2Deploy(account, dueviaContinuityGuardBytecode, dueviaContinuityGuardAbi, [registryAddress as Address, coordinator as Address, 80], "continuity-guard");
+        await ensureProjectConfiguration(account, registryAddress as Address, coordinator as Address);
+        result = await create2Deploy(account, dueviaContinuityGuardBytecode, dueviaContinuityGuardAbi, [registryAddress as Address, coordinator as Address, 80, demoProjectId], "continuity-guard-v3");
       } else if (kind === "pool") {
         if (!isAddress(continuityGuard)) throw new Error("Deploy Dual Guard first");
         result = await create2Deploy(account, dueviaContinuityPoolBytecode, dueviaContinuityPoolAbi, [continuityGuard as Address], "continuity-pool");
       } else {
-        if (!validConfiguration) throw new Error("Enter three governance addresses and three non-overlapping observer addresses, then confirm independent control");
+        if (!validConfiguration) throw new Error("Enter three governance addresses and three non-overlapping testnet observer identities, then confirm the separation");
         localStorage.setItem("duevia-governance-addresses", JSON.stringify(governance));
         localStorage.setItem("duevia-observer-addresses", JSON.stringify(observers));
         result = kind === "multisig"
@@ -130,12 +167,12 @@ export default function InfrastructureDeployer({ wallet, registryAddress }: { wa
           : await create2Deploy(account, dueviaObserverQuorumBytecode, dueviaObserverQuorumAbi, [observers as Address[], 2], "observer-quorum");
       }
       saveResult(kind, result);
-      if (kind === "coordinator") { setCoordinator(result.address); localStorage.setItem("duevia-recovery-coordinator-v2", result.address); }
-      if (kind === "guard") { setContinuityGuard(result.address); localStorage.setItem("duevia-continuity-guard-v2", result.address); }
-      if (kind === "pool") { setContinuityPool(result.address); localStorage.setItem("duevia-continuity-pool-v2", result.address); }
-      if (kind === "multisig") { setMultisig(result.address); localStorage.setItem("duevia-recovery-multisig-v2", result.address); }
-      if (kind === "quorum") { setQuorum(result.address); localStorage.setItem("duevia-observer-quorum-v2", result.address); }
-      setNotice(`${kind} ready at ${result.address}${result.transactionHash ? ` · tx ${result.transactionHash}` : " · existing deployment verified"}`);
+      if (kind === "coordinator") { setCoordinator(result.address); localStorage.setItem("duevia-recovery-coordinator-v3", result.address); }
+      if (kind === "guard") { setContinuityGuard(result.address); localStorage.setItem("duevia-continuity-guard-v3", result.address); }
+      if (kind === "pool") { setContinuityPool(result.address); localStorage.setItem("duevia-continuity-pool-v3", result.address); }
+      if (kind === "multisig") { setMultisig(result.address); localStorage.setItem("duevia-recovery-multisig-v3", result.address); }
+      if (kind === "quorum") { setQuorum(result.address); localStorage.setItem("duevia-observer-quorum-v3", result.address); }
+      setNotice(`${kind} ready at ${result.address}${result.transactionHash ? ` · tx ${result.transactionHash}` : " · existing deployment verified"}${kind === "guard" ? ` · project ${demoProjectId}` : ""}`);
     } catch (error) { setNotice(`${kind} failed: ${(error instanceof Error ? error.message : String(error)).slice(0, 240)}`); }
     finally { setRunning(false); }
   };
@@ -157,6 +194,51 @@ export default function InfrastructureDeployer({ wallet, registryAddress }: { wa
   };
 
   const takeoverData = (target: "registry" | "coordinator") => encodeFunctionData({ abi: target === "registry" ? dueviaRegistryAbi : dueviaRecoveryAbi, functionName: "acceptOwnership" });
+  const projectTakeoverData = (target: "registry" | "coordinator") => encodeFunctionData({ abi: target === "registry" ? dueviaRegistryAbi : dueviaRecoveryAbi, functionName: "acceptProjectOwnership", args: [demoProjectId] });
+
+  const startProjectOwnershipTransfer = async () => {
+    setRunning(true);
+    try {
+      const account = await requireBootstrap();
+      if (!isAddress(registryAddress) || !isAddress(coordinator) || !isAddress(multisig)) throw new Error("Registry, Coordinator, and Multisig are required");
+      const registryTx = await write(account, registryAddress as Address, dueviaRegistryAbi, "transferProjectOwnership", [demoProjectId, multisig as Address]);
+      const coordinatorTx = await write(account, coordinator as Address, dueviaRecoveryAbi, "transferProjectOwnership", [demoProjectId, multisig as Address]);
+      const current = JSON.parse(localStorage.getItem("duevia-final-testnet-evidence") || "{}") as Record<string, unknown>;
+      current.projectOwnershipTransferStarted = { projectId: demoProjectId, registryTransactionHash: registryTx.hash, registryBlockNumber: registryTx.blockNumber.toString(), coordinatorTransactionHash: coordinatorTx.hash, coordinatorBlockNumber: coordinatorTx.blockNumber.toString() };
+      localStorage.setItem("duevia-final-testnet-evidence", JSON.stringify(current));
+      setNotice(`Project ownership transfers started · Registry ${registryTx.hash} · Coordinator ${coordinatorTx.hash}`);
+    } catch (error) { setNotice(`Project ownership transfer failed: ${(error instanceof Error ? error.message : String(error)).slice(0, 240)}`); }
+    finally { setRunning(false); }
+  };
+
+  const approveProjectTakeover = async (target: "registry" | "coordinator") => {
+    setRunning(true);
+    try {
+      const account = await activeAccount();
+      if (!governance.some((value) => value.toLowerCase() === account.toLowerCase())) throw new Error("Connect a configured governance signer");
+      const targetAddress = target === "registry" ? registryAddress : coordinator;
+      if (!isAddress(multisig) || !isAddress(targetAddress)) throw new Error("Target deployment is missing");
+      const result = await write(account, multisig as Address, dueviaRecoveryMultisigAbi, "approve", [targetAddress as Address, BigInt(0), projectTakeoverData(target)]);
+      setNotice(`${target} project takeover approved by ${account} · ${result.hash}`);
+    } catch (error) { setNotice(`Project approval failed: ${(error instanceof Error ? error.message : String(error)).slice(0, 240)}`); }
+    finally { setRunning(false); }
+  };
+
+  const executeProjectTakeover = async (target: "registry" | "coordinator") => {
+    setRunning(true);
+    try {
+      const account = await activeAccount();
+      if (!governance.some((value) => value.toLowerCase() === account.toLowerCase())) throw new Error("Connect a configured governance signer");
+      const targetAddress = target === "registry" ? registryAddress : coordinator;
+      if (!isAddress(multisig) || !isAddress(targetAddress)) throw new Error("Target deployment is missing");
+      const result = await write(account, multisig as Address, dueviaRecoveryMultisigAbi, "execute", [targetAddress as Address, BigInt(0), projectTakeoverData(target)]);
+      const current = JSON.parse(localStorage.getItem("duevia-final-testnet-evidence") || "{}") as Record<string, unknown>;
+      current[`${target}ProjectOwnershipAccepted`] = { projectId: demoProjectId, transactionHash: result.hash, blockNumber: result.blockNumber.toString() };
+      localStorage.setItem("duevia-final-testnet-evidence", JSON.stringify(current));
+      setNotice(`${target} project ownership accepted by Multisig · ${result.hash}`);
+    } catch (error) { setNotice(`Project execution failed: ${(error instanceof Error ? error.message : String(error)).slice(0, 240)}`); }
+    finally { setRunning(false); }
+  };
 
   const approveTakeover = async (target: "registry" | "coordinator") => {
     setRunning(true);
@@ -191,13 +273,15 @@ export default function InfrastructureDeployer({ wallet, registryAddress }: { wa
   const refreshAudit = async () => {
     if (!isAddress(registryAddress) || !isAddress(coordinator)) return setNotice("Registry and Coordinator are required for the ownership audit");
     try {
-      const [registryOwner, coordinatorOwner, bootstrapAttestor, bootstrapOperator] = await Promise.all([
+      const [registryOwner, coordinatorOwner, registryProjectOwner, coordinatorProjectOwner, bootstrapAttestor, bootstrapOperator] = await Promise.all([
         publicClient.readContract({ address: registryAddress as Address, abi: dueviaRegistryAbi, functionName: "owner" }),
         publicClient.readContract({ address: coordinator as Address, abi: dueviaRecoveryAbi, functionName: "owner" }),
+        publicClient.readContract({ address: registryAddress as Address, abi: dueviaRegistryAbi, functionName: "projectOwners", args: [demoProjectId] }),
+        publicClient.readContract({ address: coordinator as Address, abi: dueviaRecoveryAbi, functionName: "projectOwners", args: [demoProjectId] }),
         publicClient.readContract({ address: registryAddress as Address, abi: dueviaRegistryAbi, functionName: "authorizedAttestors", args: [projectWallet as Address] }),
         publicClient.readContract({ address: coordinator as Address, abi: dueviaRecoveryAbi, functionName: "operators", args: [projectWallet as Address] }),
       ]);
-      setAudit({ registryOwner: String(registryOwner), coordinatorOwner: String(coordinatorOwner), bootstrapAttestor: Boolean(bootstrapAttestor), bootstrapOperator: Boolean(bootstrapOperator) });
+      setAudit({ registryOwner: String(registryOwner), coordinatorOwner: String(coordinatorOwner), registryProjectOwner: String(registryProjectOwner), coordinatorProjectOwner: String(coordinatorProjectOwner), bootstrapAttestor: Boolean(bootstrapAttestor), bootstrapOperator: Boolean(bootstrapOperator) });
       setNotice("Onchain governance state refreshed from X Layer Testnet.");
     } catch (error) { setNotice(`Audit failed: ${(error instanceof Error ? error.message : String(error)).slice(0, 240)}`); }
   };
@@ -207,14 +291,16 @@ export default function InfrastructureDeployer({ wallet, registryAddress }: { wa
     <div className="monitor-grid"><div className="monitor-card"><span>Keeper operations</span><strong>{runtime.operationsStatus}</strong><small>{runtime.keeperRuns} runs · failover {runtime.failoverStatus}</small></div><div className="monitor-card"><span>AI investigator</span><strong>{runtime.model === "model-grounded" ? "MODEL LIVE" : "FALLBACK"}</strong><small>Structured output + verifier</small></div><div className="monitor-card"><span>Recovery state</span><strong>{runtime.incidents} incidents</strong><small>{runtime.capsules} capsules · {runtime.queuedActions} approval queue</small></div><div className="monitor-card"><span>Coordinator</span><strong>{coordinator ? short(coordinator) : "NOT DEPLOYED"}</strong><small>X Layer Testnet</small></div></div>
     <div className="continuity-buttons"><button className="upload-package" type="button" onClick={() => deploy("coordinator")} disabled={running || Boolean(coordinator)}>Deploy Coordinator</button><button className="upload-package" type="button" onClick={() => deploy("guard")} disabled={running || !coordinator || !registryAddress || Boolean(continuityGuard)}>Deploy Dual Guard</button><button className="anchor-button" type="button" onClick={() => deploy("pool")} disabled={running || !continuityGuard || Boolean(continuityPool)}>Deploy Continuity Pool</button></div>
     <div className="governance-console">
-      <div className="governance-heading"><span>2-OF-3 GOVERNANCE + OBSERVER QUORUM</span><strong>{validConfiguration ? "CONFIGURATION VALID" : "SEPARATE THE CONTROL PLANES"}</strong></div>
+      <div className="governance-heading"><span>2-OF-3 GOVERNANCE + OBSERVER QUORUM</span><strong>{validConfiguration ? "TESTNET CONFIGURATION VALID" : "SEPARATE THE TEST IDENTITIES"}</strong></div>
       <div className="governance-inputs">{governance.map((value, index) => <label key={index}><span>Governance signer {index + 1}</span><input value={value} onChange={(event) => setGovernance((current) => current.map((item, itemIndex) => itemIndex === index ? event.target.value.trim() : item))} spellCheck={false} /></label>)}</div>
-      <div className="governance-inputs observer-inputs">{observers.map((value, index) => <label key={index}><span>Independent observer {index + 1}</span><input value={value} onChange={(event) => setObservers((current) => current.map((item, itemIndex) => itemIndex === index ? event.target.value.trim() : item))} spellCheck={false} /></label>)}</div>
-      <label className="governance-confirm"><input type="checkbox" checked={independenceConfirmed} onChange={(event) => setIndependenceConfirmed(event.target.checked)} /><span>I confirm these addresses are controlled independently.</span></label>
+      <div className="governance-inputs observer-inputs">{observers.map((value, index) => <label key={index}><span>Testnet observer identity {index + 1}</span><input value={value} onChange={(event) => setObservers((current) => current.map((item, itemIndex) => itemIndex === index ? event.target.value.trim() : item))} spellCheck={false} /></label>)}</div>
+      <label className="governance-confirm"><input type="checkbox" checked={independenceConfirmed} onChange={(event) => setIndependenceConfirmed(event.target.checked)} /><span>I confirm governance and observer addresses do not overlap. These test identities are not represented as independent organizations.</span></label>
       <div className="continuity-buttons"><button type="button" className="upload-package" onClick={() => deploy("multisig")} disabled={running || !validConfiguration || Boolean(multisig)}>Deploy Recovery Multisig</button><button type="button" className="upload-package" onClick={() => deploy("quorum")} disabled={running || !validConfiguration || Boolean(quorum)}>Deploy Observer Quorum</button><button type="button" className="anchor-button" onClick={startOwnershipTransfer} disabled={running || !multisig || !coordinator || !registryAddress}>Start both ownership transfers</button></div>
       <div className="governance-actions"><div><span>Registry takeover</span><button type="button" onClick={() => approveTakeover("registry")} disabled={running || !multisig}>Approve</button><button type="button" onClick={() => executeTakeover("registry")} disabled={running || !multisig}>Execute after 2 approvals</button></div><div><span>Coordinator takeover</span><button type="button" onClick={() => approveTakeover("coordinator")} disabled={running || !multisig}>Approve</button><button type="button" onClick={() => executeTakeover("coordinator")} disabled={running || !multisig}>Execute after 2 approvals</button></div></div>
+      <button type="button" className="anchor-button" onClick={startProjectOwnershipTransfer} disabled={running || !multisig || !coordinator || !registryAddress}>Start project-level ownership transfers</button>
+      <div className="governance-actions"><div><span>Registry project takeover</span><button type="button" onClick={() => approveProjectTakeover("registry")} disabled={running || !multisig}>Approve</button><button type="button" onClick={() => executeProjectTakeover("registry")} disabled={running || !multisig}>Execute after 2 approvals</button></div><div><span>Coordinator project takeover</span><button type="button" onClick={() => approveProjectTakeover("coordinator")} disabled={running || !multisig}>Approve</button><button type="button" onClick={() => executeProjectTakeover("coordinator")} disabled={running || !multisig}>Execute after 2 approvals</button></div></div>
       <button type="button" className="audit-refresh" onClick={refreshAudit} disabled={running || !coordinator || !registryAddress}>Refresh onchain ownership audit</button>
-      {audit && <dl className="governance-audit"><div><dt>Registry owner</dt><dd>{audit.registryOwner}</dd></div><div><dt>Coordinator owner</dt><dd>{audit.coordinatorOwner}</dd></div><div><dt>Bootstrap attestor</dt><dd>{audit.bootstrapAttestor ? "STILL AUTHORIZED" : "REVOKED"}</dd></div><div><dt>Bootstrap operator</dt><dd>{audit.bootstrapOperator ? "STILL AUTHORIZED" : "REVOKED"}</dd></div></dl>}
+      {audit && <dl className="governance-audit"><div><dt>Registry owner</dt><dd>{audit.registryOwner}</dd></div><div><dt>Coordinator owner</dt><dd>{audit.coordinatorOwner}</dd></div><div><dt>Registry project owner</dt><dd>{audit.registryProjectOwner}</dd></div><div><dt>Coordinator project owner</dt><dd>{audit.coordinatorProjectOwner}</dd></div><div><dt>Bootstrap attestor</dt><dd>{audit.bootstrapAttestor ? "STILL AUTHORIZED" : "REVOKED"}</dd></div><div><dt>Bootstrap operator</dt><dd>{audit.bootstrapOperator ? "STILL AUTHORIZED" : "REVOKED"}</dd></div></dl>}
       <small>Multisig {multisig ? short(multisig) : "not deployed"} · Quorum {quorum ? short(quorum) : "not deployed"}</small>
     </div>
     <small className="proof-note">{notice}</small>

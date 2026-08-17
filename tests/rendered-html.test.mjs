@@ -93,8 +93,8 @@ test("recovery coordinator preserves the real-world failure lifecycle", async ()
 test("continuity guard and pool require asset and incident eligibility together", async () => {
   const guard = await readFile(new URL("../contracts/DueviaContinuityGuard.sol", import.meta.url), "utf8");
   const pool = await readFile(new URL("../contracts/DueviaContinuityPool.sol", import.meta.url), "utf8");
-  assert.match(guard, /registry\.isEligible\(attestationId, minimumScore\)/);
-  assert.match(guard, /coordinator\.isCapitalFlowAllowed\(incidentId\)/);
+  assert.match(guard, /registry\.isProjectEligible\(projectId, attestationId, minimumScore\)/);
+  assert.match(guard, /coordinator\.isProjectCapitalFlowAllowed\(projectId, incidentId\)/);
   assert.match(pool, /guard\.requireOperational\(attestationId, incidentId\)/);
 });
 
@@ -125,6 +125,18 @@ test("the deployment console enforces final governance and ownership handoff", a
   assert.match(deployer, /bootstrapOperator/);
   assert.match(deployer, /eth_chainId/);
   assert.match(deployer, /0x7a0/);
+  assert.match(deployer, /duevia:xlayer-demo-rwa:v3/);
+  assert.match(deployer, /ensureProjectConfiguration/);
+  assert.match(deployer, /"registerProject"/);
+  assert.match(deployer, /"setProjectAttestor"/);
+  assert.match(deployer, /"setProjectOperator"/);
+  assert.match(deployer, /continuity-guard-v3/);
+  assert.match(deployer, /demoProjectId\]/);
+  assert.match(deployer, /transferProjectOwnership/);
+  assert.match(deployer, /acceptProjectOwnership/);
+  assert.match(deployer, /Start project-level ownership transfers/);
+  assert.match(deployer, /Registry project owner/);
+  assert.match(deployer, /Coordinator project owner/);
 });
 
 test("the receivables pool gates real value-bearing deposits", async () => {
@@ -156,6 +168,13 @@ test("the deployed worker includes durable operations hardening", async () => {
   assert.match(worker, /ObserverReplayRejected/);
   assert.match(worker, /Keeper lease ownership was lost/);
   assert.match(worker, /endpoint = normalizePublicEndpoint\(project\.public_endpoint\)/);
+  assert.match(worker, /observerStatusApi/);
+  assert.match(worker, /DUEVIA_OBSERVER_PRIVATE_KEY/);
+  assert.match(worker, /duevia\.observer-status\/v1/);
+  assert.match(worker, /account\.signMessage/);
+  assert.match(worker, /service-observer:/);
+  assert.match(worker, /evidenceApi/);
+  assert.match(worker, /duevia\.evidence\/v1/);
   assert.match(migration, /CREATE TABLE IF NOT EXISTS servicer_feed_receipts/);
   assert.match(migration, /ADD COLUMN observer_endpoints_json/);
   assert.match(migration, /ADD COLUMN trigger_source/);

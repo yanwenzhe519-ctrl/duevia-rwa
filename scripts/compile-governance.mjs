@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import solc from "solc";
 
-for (const contractName of ["DueviaRecoveryMultisig", "DueviaObserverQuorum"]) {
+for (const contractName of ["DueviaRecoveryMultisig", "DueviaObserverQuorum", "DueviaSafeRecoveryAdapter"]) {
   const file = `${contractName}.sol`;
   const input = {
     language: "Solidity",
@@ -13,6 +13,6 @@ for (const contractName of ["DueviaRecoveryMultisig", "DueviaObserverQuorum"]) {
   if (errors.length) throw new Error(errors.map((entry) => entry.formattedMessage).join("\n"));
   const artifact = output.contracts[file][contractName];
   if (!artifact?.evm?.bytecode?.object) throw new Error(`${contractName} compilation produced no bytecode`);
-  const prefix = contractName === "DueviaRecoveryMultisig" ? "dueviaRecoveryMultisig" : "dueviaObserverQuorum";
+  const prefix = contractName === "DueviaRecoveryMultisig" ? "dueviaRecoveryMultisig" : contractName === "DueviaObserverQuorum" ? "dueviaObserverQuorum" : "dueviaSafeRecoveryAdapter";
   fs.writeFileSync(`lib/${prefix.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`)}-artifact.ts`, `// Generated from contracts/${file}.\nexport const ${prefix}Abi = ${JSON.stringify(artifact.abi)} as const;\nexport const ${prefix}Bytecode = "0x${artifact.evm.bytecode.object}" as const;\n`);
 }

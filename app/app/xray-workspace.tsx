@@ -36,7 +36,7 @@ const xLayerTestnet = {
 } as const;
 const zeroHash = `0x${"0".repeat(64)}` as Hex;
 const create2Factory = "0x4e59b44847b379578588920cA78FbF26c0B4956C" as Address;
-const registrySalt = `0x8b9d4d76a3f2e1c0b7a6958473625140fedcba98765432100123456789abcdef` as Hex;
+const registrySalt = `0x00b9183caf97239c103763505f21f5029578dad4e37bbeb8b296d6cb8bfe520c` as Hex;
 const guardSalt = `0x4d554152445f47554152445f56315f585f4c415945525f544553544e45540000` as Hex;
 const poolSalt = `0x4455455649415f504f4f4c5f56315f585f4c415945525f544553544e45540000` as Hex;
 const suspendedAttestationId = "0x50cdc9c0013f005e30d4d6d29cc6ff95c0021598da8a363b8d53fbe829fd2a7c" as Hex;
@@ -81,11 +81,11 @@ export default function DueviaWorkspace() {
   const selected = useMemo(() => report.modules.find((module) => module.id === activeModule) ?? report.modules[0], [activeModule, report]);
 
   useEffect(() => {
-    const saved = window.localStorage.getItem("duevia-testnet-registry");
+    const saved = window.localStorage.getItem("duevia-testnet-registry-v3");
     // The pre-owner-fix registry cannot authorize the connected wallet. Drop
     // it during hydration so the UI always offers the corrected deployment.
     if (saved?.toLowerCase() === "0x16b1ba956f508463188f8b0ea8dad25c76b10568") {
-      window.localStorage.removeItem("duevia-testnet-registry");
+      window.localStorage.removeItem("duevia-testnet-registry-v3");
       return;
     }
     // Restore the last user-deployed registry after hydration.
@@ -176,7 +176,7 @@ export default function DueviaWorkspace() {
         const existingOwner = await publicClient.readContract({ address: registryAddress, abi: dueviaRegistryAbi, functionName: "owner" });
         if (String(existingOwner).toLowerCase() !== wallet.toLowerCase()) throw new Error("Predicted registry already exists with a different owner");
         setDeployedRegistry(registryAddress);
-        window.localStorage.setItem("duevia-testnet-registry", registryAddress);
+        window.localStorage.setItem("duevia-testnet-registry-v3", registryAddress);
         setNotice(`Existing testnet registry restored: ${shortAddress(registryAddress)}. Owner verified as ${shortAddress(wallet)}.`);
         return;
       }
@@ -188,7 +188,7 @@ export default function DueviaWorkspace() {
       const deployedOwner = await publicClient.readContract({ address: registryAddress, abi: dueviaRegistryAbi, functionName: "owner" });
       if (String(deployedOwner).toLowerCase() !== wallet.toLowerCase()) throw new Error("Registry owner does not match the connected wallet");
       setDeployedRegistry(registryAddress);
-      window.localStorage.setItem("duevia-testnet-registry", registryAddress);
+      window.localStorage.setItem("duevia-testnet-registry-v3", registryAddress);
       setAnchorTx(hash);
       // CREATE2 factory deployments do not populate receipt.contractAddress;
       // the verified predicted address is the canonical deployment result.
