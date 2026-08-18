@@ -94,6 +94,9 @@ async function runKeeper(env: Env, triggerSource = "cloudflare-cron-primary") {
 async function runKeeperOnce(env: Env, startedAt: string, triggerSource: string, holder: string) {
   const cursor = await env.WATCHDOG_DB.prepare("SELECT last_scanned_block FROM scanner_state WHERE chain_id = 1952").first<{ last_scanned_block: string }>();
   const scan = await scanXLayer({ rpcUrl: env.XLAYER_RPC_URL || "https://testrpc.xlayer.tech", fromBlock: cursor ? BigInt(cursor.last_scanned_block) + 1n : undefined });
+  if (scan.skippedFromBlock) {
+    await persistObservation(env.WATCHDOG_DB, { observationId: `scanner-gap:${startedAt}`, poolId: "DUEVIA-SYSTEM", source: "xlayer-rpc", event: "ScannerRangeTruncated", fromBlock: scan.skippedFromBlock, toBlock: scan.fromBlock, latestBlock: scan.latestBlock });
+  }
   for (const observation of scan.observations) await persistObservation(env.WATCHDOG_DB, observation);
   const projects = await env.WATCHDOG_DB.prepare("SELECT * FROM projects WHERE enabled = 1").all<Record<string, unknown>>();
   for (const project of projects.results) {

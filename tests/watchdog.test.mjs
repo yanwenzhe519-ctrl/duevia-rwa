@@ -37,6 +37,19 @@ test("scanner reads X Layer logs by protocol event signature across addresses", 
   assert.equal(result.observations[0].event, "DepositAccepted");
 });
 
+test("scanner bounds a stale cursor to the latest safe RPC window", async () => {
+  const fetchImpl = async (_url, init) => {
+    const request = JSON.parse(init.body);
+    if (request.method === "eth_blockNumber") return { ok: true, json: async () => ({ result: "0x2710" }) };
+    assert.equal(request.method, "eth_getLogs");
+    return { ok: true, json: async () => ({ result: [] }) };
+  };
+  const result = await scanXLayer({ fromBlock: 1, fetchImpl });
+  assert.equal(result.fromBlock, "7989");
+  assert.equal(result.toBlock, "9988");
+  assert.equal(result.skippedFromBlock, "1");
+});
+
 test("public intelligence marks independently reported default signals", async () => {
   const result = await searchPublicIntelligence({ query: "Example Servicer", fetchImpl: async () => ({ ok: true, json: async () => ({ articles: [{ title: "Example Servicer missed payment and faces default", url: "https://news.example/a", domain: "news.example", seendate: "20260816T120000Z", language: "English" }] }) }) });
   assert.equal(result.source, "gdelt-doc-v2");
