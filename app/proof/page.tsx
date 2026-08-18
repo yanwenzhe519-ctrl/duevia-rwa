@@ -13,7 +13,7 @@ const evidence = [
 
 export default function ProofPage() {
   return <main className="proof-page">
-    <nav className="site-nav shell"><Link className="xray-brand" href="/" aria-label="Duevia RWA home"><span className="xray-mark">D</span><span>DUEVIA RWA</span></Link><div className="site-links"><Link href="/">Product</Link><Link href="/app">DApp</Link><a href="https://github.com/yanwenzhe519-ctrl/duevia-rwa" target="_blank" rel="noreferrer">GitHub</a></div><Link className="nav-cta" href="/app">Open DApp <span>→</span></Link></nav>
+    <nav className="site-nav shell"><Link className="xray-brand" href="/" aria-label="Duevia RWA home"><span className="xray-mark">D</span><span>DUEVIA RWA</span></Link><div className="site-links"><Link href="/">Product</Link><Link href="/app">DApp</Link><a href="/api/evidence" target="_blank" rel="noreferrer">API</a><a href="https://github.com/yanwenzhe519-ctrl/duevia-rwa" target="_blank" rel="noreferrer">GitHub</a></div><Link className="nav-cta" href="/app">Open DApp <span>→</span></Link></nav>
 
     <section className="proof-hero shell">
       <span className="section-index">X LAYER AI SEASON / EVIDENCE</span>
@@ -21,6 +21,11 @@ export default function ProofPage() {
       <p>Duevia publishes only evidence that can be checked in code, on X Layer Testnet, or through its live runtime. Test fixtures and pending deployment work are labelled separately.</p>
       <div className="proof-links"><Link className="button-dark" href="/app">Open live DApp <span>→</span></Link><a className="button-quiet" href="https://github.com/yanwenzhe519-ctrl/duevia-rwa" target="_blank" rel="noreferrer">Inspect source code</a></div>
       <ReleaseProof />
+    </section>
+
+    <section className="proof-section shell readiness-section">
+      <div className="proof-heading"><div><span className="section-index">00 / SUBMISSION READINESS</span><h2>Ready for review.<br />Clear about the gaps.</h2></div><p>AI Season requires an AI product deployed on X Layer Testnet, an independently operated project X account, an official post mentioning @XLayerOfficial, and a complete Google Form submission.</p></div>
+      <div className="readiness-grid"><article className="readiness-ready"><span>TECHNICAL GATE</span><h3>AI + X Layer Testnet</h3><p>Workers AI investigation, deterministic policy controls, six final contracts, and a full incident rehearsal are live and linked below.</p></article><article className="readiness-ready"><span>LIQUIDITY GRANT</span><h3>Evidence supports the case</h3><p>The grant is assessed on product performance, innovation, user value, and ecosystem contribution. The page publishes verifiable signals instead of claiming an award.</p></article><article className="readiness-boundary"><span>DATA BOUNDARY</span><h3>Testnet is labelled</h3><p>Current public metrics are testnet, demo, or shadow-runtime evidence. No mainnet TVL, real-user volume, or RWA scale is presented as fact.</p></article></div>
     </section>
 
     <section className="proof-section shell">
