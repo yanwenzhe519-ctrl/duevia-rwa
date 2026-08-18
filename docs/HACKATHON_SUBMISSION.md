@@ -54,6 +54,25 @@ Governance evidence:
 - Bootstrap global Attestor and Operator roles are revoked.
 - Project-scoped Attestor and Operator roles remain enabled for the explicitly authorized rehearsal wallet.
 
+## Final-stack incident rehearsal
+
+- Project ID: `0x5c939e6382044f5bf74e865f5b497f038c90ec9dc65b96b36bd8b5d434ab3477`
+- Incident ID: `0x3ea7e7e6a9c80f8a80ce63f0075affc0e8cfaf84c267d652514def87888ebd33`
+- Recovery Root: `0x58318a3032ad1c918464dfeb9bbea47b16fd27d4b36087b0659781fa9cbf6b17`
+- SUSPENDED attestation: `0xe56c5591731c52acd3aa906d710ab7443b9d46b4cd2dd27ba87272eb9408bfa4`
+- VERIFIED successor attestation: `0xe044c7158ed81f1c9b395e47c0f8361885ef01b61d1fa8f14c18a1d1adcee30e`
+- Pool rejection was verified by simulation while SUSPENDED; the final VERIFIED 1 wei deposit was accepted onchain.
+
+Transactions:
+
+- SUSPENDED Registry attestation: `0xf604e74c71eaff1f5a6db121a440f4b24f321d964fff127ff09bdac2dcf4b0bc` (block `38591749`)
+- Coordinator incident opened: `0x33e87afc3210cad68c21a835a9a725482c8f2fed3469fd20098e6a6306a84ab3` (block `38591754`)
+- Recovery Root recorded: `0x2b5c82a58ef8d16f24f6ebdecad6eff39cd6dc8cbd51fbbdec45b5ecca3c31bb` (block `38591883`)
+- Successor proposed: `0x8d592420429f26368e4a751bf764eb6ad3304700c64fd1b82ebcd251b71f1390` (block `38591888`)
+- VERIFIED Registry attestation: `0xb146b64c33f1754473467212a7b36859aef9e066fe042928b1d6ced3f501de7e` (block `38591892`)
+- Successor verified: `0x389145183a53f8eff5ca5a71c97e75bd10eff80d36b4ba67aaeb3454d1f1d8e8` (block `38591896`)
+- VERIFIED 1 wei deposit accepted: `0xbc35fcf72a84353db732c9f1fe85c39fdb2be34d6bdead6ef924288c2dfb0363` (block `38591900`)
+
 ## Historical enforcement proof
 
 These transactions prove the earlier Registry/Guard/Pool enforcement flow. They are deliberately labelled as legacy evidence and are not represented as a final-stack incident rehearsal.
@@ -64,10 +83,8 @@ These transactions prove the earlier Registry/Guard/Pool enforcement flow. They 
 - Guard deployment transaction: `0x19ab65ad6cadb767224df3c98a8555f90a892a2239e46c3fdaf28b2375c3a27d`
 - Guarded 1 wei Pool deposit: `0xe525d1b7fa4dc315a0b014c6f5e1d0e8a2fd66ce2bff0b346e37047c403f9a77`
 
-## Remaining authorized user actions
+## Remaining submission actions
 
-- Run the final-stack incident rehearsal from the connected project wallet: `SUSPENDED -> Pool rejection -> recovery root -> successor -> VERIFIED -> accepted 1 wei deposit`.
-- Record the final rehearsal transaction hashes, block numbers, incident ID, attestation IDs, and Recovery Root in this document and `/api/evidence`.
 - Record a short end-to-end product demo.
 - Publish the project X post mentioning `@XLayerOfficial` and submit the official form.
 

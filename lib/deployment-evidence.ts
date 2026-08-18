@@ -33,3 +33,21 @@ export const legacyRehearsalTransactions = [
   { label: "Legacy VERIFIED attestation", transaction: "0x28765800663e1dfa48ecbb9a09ead38673a0c9316e0e8faefc2862d66e1bfc55" },
   { label: "Legacy guarded 1 wei deposit", transaction: "0xe525d1b7fa4dc315a0b014c6f5e1d0e8a2fd66ce2bff0b346e37047c403f9a77" },
 ] as const;
+
+export const dueviaFinalRehearsal = {
+  projectId: dueviaProject.projectId,
+  incidentId: "0x3ea7e7e6a9c80f8a80ce63f0075affc0e8cfaf84c267d652514def87888ebd33",
+  recoveryRoot: "0x58318a3032ad1c918464dfeb9bbea47b16fd27d4b36087b0659781fa9cbf6b17",
+  suspendedAttestationId: "0xe56c5591731c52acd3aa906d710ab7443b9d46b4cd2dd27ba87272eb9408bfa4",
+  verifiedAttestationId: "0xe044c7158ed81f1c9b395e47c0f8361885ef01b61d1fa8f14c18a1d1adcee30e",
+  poolBlocked: true,
+  transactions: [
+    { label: "Final SUSPENDED registry attestation", transaction: "0xf604e74c71eaff1f5a6db121a440f4b24f321d964fff127ff09bdac2dcf4b0bc", blockNumber: 38591749 },
+    { label: "Final Coordinator incident opened", transaction: "0x33e87afc3210cad68c21a835a9a725482c8f2fed3469fd20098e6a6306a84ab3", blockNumber: 38591754 },
+    { label: "Final recovery root recorded", transaction: "0x2b5c82a58ef8d16f24f6ebdecad6eff39cd6dc8cbd51fbbdec45b5ecca3c31bb", blockNumber: 38591883 },
+    { label: "Final successor proposed", transaction: "0x8d592420429f26368e4a751bf764eb6ad3304700c64fd1b82ebcd251b71f1390", blockNumber: 38591888 },
+    { label: "Final VERIFIED registry attestation", transaction: "0xb146b64c33f1754473467212a7b36859aef9e066fe042928b1d6ced3f501de7e", blockNumber: 38591892 },
+    { label: "Final successor verified", transaction: "0x389145183a53f8eff5ca5a71c97e75bd10eff80d36b4ba67aaeb3454d1f1d8e8", blockNumber: 38591896 },
+    { label: "Final VERIFIED 1 wei deposit accepted", transaction: "0xbc35fcf72a84353db732c9f1fe85c39fdb2be34d6bdead6ef924288c2dfb0363", blockNumber: 38591900 },
+  ],
+} as const;

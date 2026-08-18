@@ -14,7 +14,7 @@ import { evaluateOperationsHealth } from "../lib/operations-health.mjs";
 import { parseServicerFeed, servicerFeedStatus } from "../lib/servicer-feed.mjs";
 import { verifyServicerFeedSignature } from "../lib/servicer-feed-security.mjs";
 import { analyzePortfolio } from "../lib/portfolio-engine.mjs";
-import { dueviaContracts, dueviaGovernanceTransactions, dueviaProject, dueviaRelease, legacyRehearsalTransactions } from "../lib/deployment-evidence";
+import { dueviaContracts, dueviaFinalRehearsal, dueviaGovernanceTransactions, dueviaProject, dueviaRelease, legacyRehearsalTransactions } from "../lib/deployment-evidence";
 
 interface Env {
   ASSETS: Fetcher;
@@ -375,6 +375,7 @@ async function evidenceApi(env: Env) {
       },
     },
     legacyRehearsalTransactions,
+    finalRehearsal: dueviaFinalRehearsal,
     runtimeEvidenceAvailable,
     projects,
     incidents,
