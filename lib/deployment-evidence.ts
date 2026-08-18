@@ -20,6 +20,12 @@ export const dueviaGovernanceTransactions = [
   { label: "Coordinator global ownership accepted", transaction: "0x6f5f65a9a27c1a59c7593da7c9e078a7cae14a60ed07abefe099693a9eecfbf5" },
   { label: "Registry project ownership accepted", transaction: "0xfa3703c7cc24e2a7d065fb29d6c19d2b5a01bc1bcc05d798053c29e8997f1ec5" },
   { label: "Coordinator project ownership accepted", transaction: "0x8ef87178846800ce9e57e355d13bc34b6995e4a9193fb2c2df501f981b04f6ad" },
+  { label: "Observer Quorum project operator approval 1", transaction: "0xe0552cc25609e394db1757ea2edc45d5a3c668e3e5a3c59c8528363711d555fd" },
+  { label: "Observer Quorum project operator approval 2", transaction: "0xdb1f8fab32dd967292da1a95a9d19857fab5c2b250c0496e96bd57fe696fcaf6" },
+  { label: "Observer Quorum project operator executed", transaction: "0x560ab3d2857782868c7d4b4830b84eabd5b579a9793ae31f770ea6d2996d4742" },
+  { label: "Recovery Multisig project operator approval 1", transaction: "0x474f00bc57a41c3f06710c00237f5f0eb907350c92baabe5cf59e1cda8d3f67b" },
+  { label: "Recovery Multisig project operator approval 2", transaction: "0x12e244e981834cacfb88bfb5be3f6bd59e4c517d7430885c5c11668fecfb24c8" },
+  { label: "Recovery Multisig project operator executed", transaction: "0x8556881a70f954472b8cebe4c3e2494f4c778280ab4005b0f3d098c426da1bee" },
 ] as const;
 
 export const legacyRehearsalTransactions = [

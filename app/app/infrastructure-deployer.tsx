@@ -29,6 +29,8 @@ type GovernanceAudit = {
   coordinatorProjectOwner: string;
   bootstrapAttestor: boolean;
   bootstrapOperator: boolean;
+  observerQuorumProjectOperator: boolean;
+  recoveryMultisigProjectOperator: boolean;
 };
 
 async function activeAccount() {
@@ -299,15 +301,17 @@ export default function InfrastructureDeployer({ wallet, registryAddress }: { wa
   const refreshAudit = async () => {
     if (!isAddress(registryAddress) || !isAddress(coordinator)) return setNotice("Registry and Coordinator are required for the ownership audit");
     try {
-      const [registryOwner, coordinatorOwner, registryProjectOwner, coordinatorProjectOwner, bootstrapAttestor, bootstrapOperator] = await Promise.all([
+      const [registryOwner, coordinatorOwner, registryProjectOwner, coordinatorProjectOwner, bootstrapAttestor, bootstrapOperator, observerQuorumProjectOperator, recoveryMultisigProjectOperator] = await Promise.all([
         publicClient.readContract({ address: registryAddress as Address, abi: dueviaRegistryAbi, functionName: "owner" }),
         publicClient.readContract({ address: coordinator as Address, abi: dueviaRecoveryAbi, functionName: "owner" }),
         publicClient.readContract({ address: registryAddress as Address, abi: dueviaRegistryAbi, functionName: "projectOwners", args: [demoProjectId] }),
         publicClient.readContract({ address: coordinator as Address, abi: dueviaRecoveryAbi, functionName: "projectOwners", args: [demoProjectId] }),
         publicClient.readContract({ address: registryAddress as Address, abi: dueviaRegistryAbi, functionName: "authorizedAttestors", args: [projectWallet as Address] }),
         publicClient.readContract({ address: coordinator as Address, abi: dueviaRecoveryAbi, functionName: "operators", args: [projectWallet as Address] }),
+        isAddress(quorum) ? publicClient.readContract({ address: coordinator as Address, abi: dueviaRecoveryAbi, functionName: "projectOperators", args: [demoProjectId, quorum as Address] }) : Promise.resolve(false),
+        isAddress(multisig) ? publicClient.readContract({ address: coordinator as Address, abi: dueviaRecoveryAbi, functionName: "projectOperators", args: [demoProjectId, multisig as Address] }) : Promise.resolve(false),
       ]);
-      setAudit({ registryOwner: String(registryOwner), coordinatorOwner: String(coordinatorOwner), registryProjectOwner: String(registryProjectOwner), coordinatorProjectOwner: String(coordinatorProjectOwner), bootstrapAttestor: Boolean(bootstrapAttestor), bootstrapOperator: Boolean(bootstrapOperator) });
+      setAudit({ registryOwner: String(registryOwner), coordinatorOwner: String(coordinatorOwner), registryProjectOwner: String(registryProjectOwner), coordinatorProjectOwner: String(coordinatorProjectOwner), bootstrapAttestor: Boolean(bootstrapAttestor), bootstrapOperator: Boolean(bootstrapOperator), observerQuorumProjectOperator: Boolean(observerQuorumProjectOperator), recoveryMultisigProjectOperator: Boolean(recoveryMultisigProjectOperator) });
       setNotice("Onchain governance state refreshed from X Layer Testnet.");
     } catch (error) { setNotice(`Audit failed: ${(error instanceof Error ? error.message : String(error)).slice(0, 240)}`); }
   };
@@ -327,7 +331,7 @@ export default function InfrastructureDeployer({ wallet, registryAddress }: { wa
       <div className="governance-actions"><div><span>Registry project takeover</span><button type="button" onClick={() => approveProjectTakeover("registry")} disabled={running || !multisig}>Approve</button><button type="button" onClick={() => executeProjectTakeover("registry")} disabled={running || !multisig}>Execute after 2 approvals</button></div><div><span>Coordinator project takeover</span><button type="button" onClick={() => approveProjectTakeover("coordinator")} disabled={running || !multisig}>Approve</button><button type="button" onClick={() => executeProjectTakeover("coordinator")} disabled={running || !multisig}>Execute after 2 approvals</button></div></div>
       <div className="governance-actions"><div><span>Observer Quorum project operator</span><button type="button" onClick={() => approveProjectOperatorGrant(quorum, "Observer Quorum")} disabled={running || !multisig || !coordinator || !isAddress(quorum)}>Approve</button><button type="button" onClick={() => executeProjectOperatorGrant(quorum, "Observer Quorum")} disabled={running || !multisig || !coordinator || !isAddress(quorum)}>Execute after 2 approvals</button></div><div><span>Recovery Multisig project operator</span><button type="button" onClick={() => approveProjectOperatorGrant(multisig, "Recovery Multisig")} disabled={running || !multisig || !coordinator || !isAddress(multisig)}>Approve</button><button type="button" onClick={() => executeProjectOperatorGrant(multisig, "Recovery Multisig")} disabled={running || !multisig || !coordinator || !isAddress(multisig)}>Execute after 2 approvals</button></div></div>
       <button type="button" className="audit-refresh" onClick={refreshAudit} disabled={running || !coordinator || !registryAddress}>Refresh onchain ownership audit</button>
-      {audit && <dl className="governance-audit"><div><dt>Registry owner</dt><dd>{audit.registryOwner}</dd></div><div><dt>Coordinator owner</dt><dd>{audit.coordinatorOwner}</dd></div><div><dt>Registry project owner</dt><dd>{audit.registryProjectOwner}</dd></div><div><dt>Coordinator project owner</dt><dd>{audit.coordinatorProjectOwner}</dd></div><div><dt>Bootstrap attestor</dt><dd>{audit.bootstrapAttestor ? "STILL AUTHORIZED" : "REVOKED"}</dd></div><div><dt>Bootstrap operator</dt><dd>{audit.bootstrapOperator ? "STILL AUTHORIZED" : "REVOKED"}</dd></div></dl>}
+      {audit && <dl className="governance-audit"><div><dt>Registry owner</dt><dd>{audit.registryOwner}</dd></div><div><dt>Coordinator owner</dt><dd>{audit.coordinatorOwner}</dd></div><div><dt>Registry project owner</dt><dd>{audit.registryProjectOwner}</dd></div><div><dt>Coordinator project owner</dt><dd>{audit.coordinatorProjectOwner}</dd></div><div><dt>Bootstrap attestor</dt><dd>{audit.bootstrapAttestor ? "STILL AUTHORIZED" : "REVOKED"}</dd></div><div><dt>Bootstrap operator</dt><dd>{audit.bootstrapOperator ? "STILL AUTHORIZED" : "REVOKED"}</dd></div><div><dt>Observer Quorum project operator</dt><dd className={audit.observerQuorumProjectOperator ? "audit-ok" : "audit-pending"}>{audit.observerQuorumProjectOperator ? "AUTHORIZED" : "NOT AUTHORIZED"}</dd></div><div><dt>Recovery Multisig project operator</dt><dd className={audit.recoveryMultisigProjectOperator ? "audit-ok" : "audit-pending"}>{audit.recoveryMultisigProjectOperator ? "AUTHORIZED" : "NOT AUTHORIZED"}</dd></div></dl>}
       <small>Multisig {multisig ? short(multisig) : "not deployed"} · Quorum {quorum ? short(quorum) : "not deployed"}</small>
     </div>
     <small className="proof-note">{notice}</small>

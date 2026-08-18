@@ -432,6 +432,8 @@ a { color: inherit; text-decoration: none; }
 .governance-audit>div { min-width: 0; padding: 10px 12px; border-bottom: 1px solid var(--line); }
 .governance-audit dt { color: #777; font-size: 10px; }
 .governance-audit dd { overflow-wrap: anywhere; margin: 4px 0 0; font-family: monospace; font-size: 11px; }
+.governance-audit .audit-ok { color: #087443; font-weight: 700; }
+.governance-audit .audit-pending { color: #a84b16; font-weight: 700; }
 .recovery-panel h3 { margin: 11px 0; font-size: 25px; line-height: 1.02; letter-spacing: -.05em; }
 .recovery-panel>p { margin: 0; color: var(--muted); font-size: 10px; line-height: 1.6; }
 .recovery-checks { margin: 20px 0; border-top: 1px solid var(--line); }

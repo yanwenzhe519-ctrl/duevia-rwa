@@ -3,7 +3,7 @@ import { handleImageOptimization, DEFAULT_DEVICE_SIZES, DEFAULT_IMAGE_SIZES } fr
 import handler from "vinext/server/app-router-entry";
 import { evaluateWatchdog } from "../lib/continuity-watchdog.mjs";
 import { scanXLayer } from "../lib/xlayer-scanner.mjs";
-import { keccak256, stringToHex, verifyMessage } from "viem";
+import { decodeFunctionResult, encodeFunctionData, keccak256, stringToHex, verifyMessage, type Address } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { searchPublicIntelligence } from "../lib/public-intelligence.mjs";
 import { collectEvidenceIds, failedInvestigation, modelResponseObject, validateInvestigation, validateModelVerifier } from "../lib/ai-investigation.mjs";
@@ -42,6 +42,27 @@ interface Env {
 interface ExecutionContext {
   waitUntil(promise: Promise<unknown>): void;
   passThroughOnException(): void;
+}
+
+const projectOperatorReadAbi = [{
+  name: "projectOperators",
+  type: "function",
+  stateMutability: "view",
+  inputs: [{ name: "projectId", type: "bytes32" }, { name: "operator", type: "address" }],
+  outputs: [{ name: "", type: "bool" }],
+}] as const;
+
+async function readProjectOperator(rpcUrl: string, coordinator: string, projectId: string, operator: string): Promise<boolean | null> {
+  try {
+    const data = encodeFunctionData({ abi: projectOperatorReadAbi, functionName: "projectOperators", args: [projectId as `0x${string}`, operator as Address] });
+    const response = await fetch(rpcUrl, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "eth_call", params: [{ to: coordinator, data }, "latest"] }) });
+    if (!response.ok) return null;
+    const payload = await response.json() as { result?: `0x${string}`; error?: unknown };
+    if (!payload.result || payload.error) return null;
+    return Boolean(decodeFunctionResult({ abi: projectOperatorReadAbi, functionName: "projectOperators", data: payload.result }));
+  } catch {
+    return null;
+  }
 }
 
 async function persistObservation(db: D1Database, observation: Record<string, unknown>) {
@@ -318,6 +339,15 @@ async function evidenceApi(env: Env) {
   } catch {
     runtimeEvidenceAvailable = false;
   }
+  const coordinator = dueviaContracts.find((contract) => contract.key === "coordinator")?.address || "";
+  const multisig = dueviaContracts.find((contract) => contract.key === "multisig")?.address || "";
+  const quorum = dueviaContracts.find((contract) => contract.key === "quorum")?.address || "";
+  const [observerQuorumProjectOperator, recoveryMultisigProjectOperator] = coordinator && multisig && quorum
+    ? await Promise.all([
+      readProjectOperator(env.XLAYER_RPC_URL || "https://testrpc.xlayer.tech", coordinator, dueviaProject.projectId, quorum),
+      readProjectOperator(env.XLAYER_RPC_URL || "https://testrpc.xlayer.tech", coordinator, dueviaProject.projectId, multisig),
+    ])
+    : [null, null];
   return Response.json({
     ok: true,
     schema: "duevia.evidence/v2",
@@ -334,6 +364,16 @@ async function evidenceApi(env: Env) {
     project: dueviaProject,
     contracts: dueviaContracts,
     governanceTransactions: dueviaGovernanceTransactions,
+    governance: {
+      coordinator,
+      projectId: dueviaProject.projectId,
+      multisig,
+      observerQuorum: quorum,
+      projectOperators: {
+        observerQuorum: observerQuorumProjectOperator,
+        recoveryMultisig: recoveryMultisigProjectOperator,
+      },
+    },
     legacyRehearsalTransactions,
     runtimeEvidenceAvailable,
     projects,
