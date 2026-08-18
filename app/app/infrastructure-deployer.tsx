@@ -195,6 +195,7 @@ export default function InfrastructureDeployer({ wallet, registryAddress }: { wa
 
   const takeoverData = (target: "registry" | "coordinator") => encodeFunctionData({ abi: target === "registry" ? dueviaRegistryAbi : dueviaRecoveryAbi, functionName: "acceptOwnership" });
   const projectTakeoverData = (target: "registry" | "coordinator") => encodeFunctionData({ abi: target === "registry" ? dueviaRegistryAbi : dueviaRecoveryAbi, functionName: "acceptProjectOwnership", args: [demoProjectId] });
+  const projectOperatorGrantData = (operator: Address) => encodeFunctionData({ abi: dueviaRecoveryAbi, functionName: "setProjectOperator", args: [demoProjectId, operator, true] });
 
   const startProjectOwnershipTransfer = async () => {
     setRunning(true);
@@ -237,6 +238,31 @@ export default function InfrastructureDeployer({ wallet, registryAddress }: { wa
       localStorage.setItem("duevia-final-testnet-evidence", JSON.stringify(current));
       setNotice(`${target} project ownership accepted by Multisig · ${result.hash}`);
     } catch (error) { setNotice(`Project execution failed: ${(error instanceof Error ? error.message : String(error)).slice(0, 240)}`); }
+    finally { setRunning(false); }
+  };
+
+  const approveProjectOperatorGrant = async (operator: string, label: string) => {
+    setRunning(true);
+    try {
+      const account = await activeAccount();
+      if (!validGovernance || !governance.some((value) => value.toLowerCase() === account.toLowerCase())) throw new Error("Connect one of the configured governance signers");
+      if (!isAddress(multisig) || !isAddress(coordinator) || !isAddress(operator)) throw new Error("Coordinator, Multisig, and operator address are required");
+      const result = await write(account, multisig as Address, dueviaRecoveryMultisigAbi, "approve", [coordinator as Address, BigInt(0), projectOperatorGrantData(operator as Address)]);
+      setNotice(`${label} operator grant approved by ${account} · ${result.hash}`);
+    } catch (error) { setNotice(`${label} operator approval failed: ${(error instanceof Error ? error.message : String(error)).slice(0, 240)}`); }
+    finally { setRunning(false); }
+  };
+
+  const executeProjectOperatorGrant = async (operator: string, label: string) => {
+    setRunning(true);
+    try {
+      const account = await activeAccount();
+      if (!validGovernance || !governance.some((value) => value.toLowerCase() === account.toLowerCase())) throw new Error("Connect one of the configured governance signers");
+      if (!isAddress(multisig) || !isAddress(coordinator) || !isAddress(operator)) throw new Error("Coordinator, Multisig, and operator address are required");
+      const result = await write(account, multisig as Address, dueviaRecoveryMultisigAbi, "execute", [coordinator as Address, BigInt(0), projectOperatorGrantData(operator as Address)]);
+      setNotice(`${label} operator grant executed by Multisig · ${result.hash}`);
+      await refreshAudit();
+    } catch (error) { setNotice(`${label} operator execution failed: ${(error instanceof Error ? error.message : String(error)).slice(0, 240)}`); }
     finally { setRunning(false); }
   };
 
@@ -299,6 +325,7 @@ export default function InfrastructureDeployer({ wallet, registryAddress }: { wa
       <div className="governance-actions"><div><span>Registry takeover</span><button type="button" onClick={() => approveTakeover("registry")} disabled={running || !multisig}>Approve</button><button type="button" onClick={() => executeTakeover("registry")} disabled={running || !multisig}>Execute after 2 approvals</button></div><div><span>Coordinator takeover</span><button type="button" onClick={() => approveTakeover("coordinator")} disabled={running || !multisig}>Approve</button><button type="button" onClick={() => executeTakeover("coordinator")} disabled={running || !multisig}>Execute after 2 approvals</button></div></div>
       <button type="button" className="anchor-button" onClick={startProjectOwnershipTransfer} disabled={running || !multisig || !coordinator || !registryAddress}>Start project-level ownership transfers</button>
       <div className="governance-actions"><div><span>Registry project takeover</span><button type="button" onClick={() => approveProjectTakeover("registry")} disabled={running || !multisig}>Approve</button><button type="button" onClick={() => executeProjectTakeover("registry")} disabled={running || !multisig}>Execute after 2 approvals</button></div><div><span>Coordinator project takeover</span><button type="button" onClick={() => approveProjectTakeover("coordinator")} disabled={running || !multisig}>Approve</button><button type="button" onClick={() => executeProjectTakeover("coordinator")} disabled={running || !multisig}>Execute after 2 approvals</button></div></div>
+      <div className="governance-actions"><div><span>Observer Quorum project operator</span><button type="button" onClick={() => approveProjectOperatorGrant(quorum, "Observer Quorum")} disabled={running || !multisig || !coordinator || !isAddress(quorum)}>Approve</button><button type="button" onClick={() => executeProjectOperatorGrant(quorum, "Observer Quorum")} disabled={running || !multisig || !coordinator || !isAddress(quorum)}>Execute after 2 approvals</button></div><div><span>Recovery Multisig project operator</span><button type="button" onClick={() => approveProjectOperatorGrant(multisig, "Recovery Multisig")} disabled={running || !multisig || !coordinator || !isAddress(multisig)}>Approve</button><button type="button" onClick={() => executeProjectOperatorGrant(multisig, "Recovery Multisig")} disabled={running || !multisig || !coordinator || !isAddress(multisig)}>Execute after 2 approvals</button></div></div>
       <button type="button" className="audit-refresh" onClick={refreshAudit} disabled={running || !coordinator || !registryAddress}>Refresh onchain ownership audit</button>
       {audit && <dl className="governance-audit"><div><dt>Registry owner</dt><dd>{audit.registryOwner}</dd></div><div><dt>Coordinator owner</dt><dd>{audit.coordinatorOwner}</dd></div><div><dt>Registry project owner</dt><dd>{audit.registryProjectOwner}</dd></div><div><dt>Coordinator project owner</dt><dd>{audit.coordinatorProjectOwner}</dd></div><div><dt>Bootstrap attestor</dt><dd>{audit.bootstrapAttestor ? "STILL AUTHORIZED" : "REVOKED"}</dd></div><div><dt>Bootstrap operator</dt><dd>{audit.bootstrapOperator ? "STILL AUTHORIZED" : "REVOKED"}</dd></div></dl>}
       <small>Multisig {multisig ? short(multisig) : "not deployed"} · Quorum {quorum ? short(quorum) : "not deployed"}</small>
