@@ -128,12 +128,18 @@ async function runKeeperOnce(env: Env, startedAt: string, triggerSource: string,
     let lastHeartbeatAt = contractActivity ? startedAt : String(project.last_heartbeat_at);
     if (/^0x[0-9a-fA-F]{40}$/.test(String(project.contract_address || ""))) {
       try {
-        const [previous, previousQueue] = await Promise.all([
+        const [previous, previousCheckpoint] = await Promise.all([
           env.WATCHDOG_DB.prepare("SELECT account, principal, yield_amount, pending_redemption FROM rwa_account_states WHERE project_id = ?").bind(String(project.pool_id)).all<Record<string, unknown>>(),
-          env.WATCHDOG_DB.prepare("SELECT request_id, account, amount, execution_status FROM rwa_redemptions WHERE project_id = ?").bind(String(project.pool_id)).all<Record<string, unknown>>(),
+          env.WATCHDOG_DB.prepare("SELECT checkpoint_json FROM rwa_checkpoints WHERE project_id = ? ORDER BY created_at DESC LIMIT 1").bind(String(project.pool_id)).first<{ checkpoint_json?: string }>(),
         ]);
         const previousAccounts = Object.fromEntries(previous.results.map((row) => [String(row.account), { principal: String(row.principal), yield: String(row.yield_amount), pendingRedemption: String(row.pending_redemption) }]));
-        const previousRedemptions = previousQueue.results.map((row) => ({ requestId: String(row.request_id), account: String(row.account), amount: String(row.amount), status: String(row.execution_status || "QUEUED").toUpperCase() === "SETTLED" ? "SETTLED" : "QUEUED" }));
+        let previousRedemptions: Array<{ requestId: string; account: string; amount: string; status: string }> = [];
+        try {
+          const parsed = JSON.parse(String(previousCheckpoint?.checkpoint_json || "{}")) as { redemptions?: unknown };
+          previousRedemptions = Array.isArray(parsed.redemptions) ? parsed.redemptions as Array<{ requestId: string; account: string; amount: string; status: string }> : [];
+        } catch {
+          await persistObservation(env.WATCHDOG_DB, { observationId: `checkpoint-previous-invalid:${project.pool_id}:${Date.now()}`, poolId: project.pool_id, source: "checkpoint-engine", event: "PreviousCheckpointInvalid" });
+        }
         const checkpoint = buildRwaCheckpoint({ projectId: String(project.pool_id), chainId: scan.chainId, contractAddress: String(project.contract_address), fromBlock: scan.fromBlock, toBlock: scan.toBlock, confirmationBlock: scan.toBlock, events: scan.observations.filter((observation) => String(observation.address).toLowerCase() === String(project.contract_address).toLowerCase()), previousAccounts, previousRedemptions });
         const checkpointId = `${project.pool_id}:${checkpoint.toBlock}`;
         const statements = [env.WATCHDOG_DB.prepare("INSERT OR IGNORE INTO rwa_checkpoints (checkpoint_id, project_id, chain_id, contract_address, from_block, to_block, confirmation_block, checkpoint_hash, checkpoint_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").bind(checkpointId, project.pool_id, checkpoint.chainId, checkpoint.contractAddress, checkpoint.fromBlock, checkpoint.toBlock, checkpoint.confirmationBlock, checkpoint.checkpointHash, JSON.stringify(checkpoint), startedAt)];
