@@ -590,7 +590,7 @@ async function performInvestigation(question: string, contextObject: unknown, en
       for (let attempt = 0; attempt < 2; attempt += 1) {
         try {
           const verifierOutput = await env.AI.run(verifierModel, { response_format: { type: "json_schema", json_schema: { type: "object", properties: { valid: { type: "boolean" }, unsupportedClaims: { type: "array", items: { type: "string" } }, reason: { type: "string" } }, required: ["valid", "unsupportedClaims", "reason"], additionalProperties: false } }, messages: [
-            { role: "system", content: "You are an independent evidence verifier. Return valid JSON only. Reject any factual claim not supported by the supplied structured evidence, and reject any material action that lacks explicit approval." },
+            { role: "system", content: "You are an independent evidence verifier. Return valid JSON only. Reject any factual claim not supported by the supplied structured evidence. A material action is safe when its requiresApproval field is true: that means the action is explicitly approval-gated, not pre-approved. Reject only actions with requiresApproval false or missing." },
             { role: "user", content: `Evidence catalog: ${JSON.stringify(evidenceIds)}. The context-root ID refers to the complete supplied context when present.\nEvidence:\n${context}\n\nCandidate investigation:\n${JSON.stringify(investigation)}\n\nReturn ${JSON.stringify({ valid: true, unsupportedClaims: ["string"], reason: "string" })}.` },
           ] });
           modelValidation = validateModelVerifier(modelResponseObject(verifierOutput));
