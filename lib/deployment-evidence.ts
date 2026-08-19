@@ -26,6 +26,27 @@ export const dueviaTakeoverAuthorization = {
   sender: "0x05667DE34Ad47bAFe8a8b976c19809cAdf7719D2",
 } as const;
 
+export const dueviaHardenedReplacement = {
+  vault: {
+    address: "0x437Fcbb7b474036FB534e0AFFafdB600D970d798",
+    deploymentTransaction: "0x1a288a406265764ffe4ac34e25331e18c2da1b08c93b04b0b5734f9a56b6265f",
+    deploymentBlock: 38719496,
+    bytecodeHash: "0x92e6d9f79750dccf46590c02341cc9a032f265561e645f56430d30d052c30f24",
+    admin: dueviaProject.multisigOwner,
+    replaces: "0x00344E2e44AFf7cF7429738E99Fd056a099A077F",
+  },
+  adapter: {
+    address: "0xeA1dbe4F4F8640214C1538210B494F5850537599",
+    deploymentTransaction: "0x6c11c46ab355d5029f704f128af2ce53dd91c15bbaa85dad02f0e5febf983e06",
+    deploymentBlock: 38719513,
+    bytecodeHash: "0x6c62cd62aaa5ea1c98ae4de4113b232a532ea779792fb510a4c9b28022db0b12",
+    admin: dueviaProject.multisigOwner,
+    vault: "0x437Fcbb7b474036FB534e0AFFafdB600D970d798",
+    replaces: "0x3d901880b9416ad7b00569C7b0B67b8e8008d6Af",
+  },
+  adapterRoleGranted: false,
+} as const;
+
 export const dueviaContracts = [
   { key: "registry", label: "Asset Assurance Registry", address: "0x2f3Ca46E20b5fe5587Ccb3CCC9ba63F82713FC2C", deploymentTransaction: "0x887a08f0eb2b0033bb1b7b6935eb972af32c6f3230813cc38fecf28bc187e545" },
   { key: "coordinator", label: "Recovery Coordinator", address: "0x87d000cF49Ca890106BB259257bd5d1b186605cA", deploymentTransaction: "0xd59401ebb65f66127d915d5970bc1f61706a3ffff8e1613c7dc57b8303a51136" },

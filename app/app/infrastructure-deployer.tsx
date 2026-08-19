@@ -173,7 +173,7 @@ export default function InfrastructureDeployer({ wallet, registryAddress }: { wa
     if (Array.isArray(savedObservers) && savedObservers.length === 3 && savedObservers.every((value) => typeof value === "string")) setObservers(savedObservers);
     fetch("/api/evidence", { cache: "no-store" }).then(async (response) => {
       if (!response.ok) return;
-      const evidence = await response.json() as { takeoverContracts?: Array<{ key: string; address: string }>; contracts?: Array<{ key: string; address: string }> };
+      const evidence = await response.json() as { takeoverContracts?: Array<{ key: string; address: string }>; contracts?: Array<{ key: string; address: string }>; hardenedReplacement?: { vault?: { address?: string }; adapter?: { address?: string } } };
       const takeover = new Map((evidence.takeoverContracts || []).map((item) => [item.key, item.address]));
       const governance = new Map((evidence.contracts || []).map((item) => [item.key, item.address]));
       const verified = { rwaRegistry: takeover.get("rwaRegistry"), checkpointRegistry: takeover.get("checkpointRegistry"), incidentMachine: takeover.get("incidentStateMachine"), rwaVault: takeover.get("rwaVault"), recoveryAdapter: takeover.get("recoveryAdapterV2") };
@@ -182,6 +182,10 @@ export default function InfrastructureDeployer({ wallet, registryAddress }: { wa
       if (verified.incidentMachine) { setIncidentMachine(verified.incidentMachine); localStorage.setItem("duevia-incident-machine-v1", verified.incidentMachine); }
       if (verified.rwaVault) { setRwaVault(verified.rwaVault); localStorage.setItem("duevia-rwa-vault-v1", verified.rwaVault); }
       if (verified.recoveryAdapter) { setRecoveryAdapter(verified.recoveryAdapter); localStorage.setItem("duevia-recovery-adapter-v2-v1", verified.recoveryAdapter); }
+      const verifiedHardenedVault = evidence.hardenedReplacement?.vault?.address;
+      const verifiedHardenedAdapter = evidence.hardenedReplacement?.adapter?.address;
+      if (verifiedHardenedVault && isAddress(verifiedHardenedVault)) { setHardenedVault(verifiedHardenedVault); localStorage.setItem("duevia-rwa-vault-hardened-v2", verifiedHardenedVault); }
+      if (verifiedHardenedAdapter && isAddress(verifiedHardenedAdapter)) { setHardenedAdapter(verifiedHardenedAdapter); localStorage.setItem("duevia-recovery-adapter-v2-hardened", verifiedHardenedAdapter); }
       const verifiedMultisig = governance.get("multisig");
       const verifiedQuorum = governance.get("quorum");
       if (verifiedMultisig) { setMultisig(verifiedMultisig); localStorage.setItem("duevia-recovery-multisig-v3", verifiedMultisig); }

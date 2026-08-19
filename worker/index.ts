@@ -16,7 +16,7 @@ import { verifyServicerFeedSignature } from "../lib/servicer-feed-security.mjs";
 import { analyzePortfolio } from "../lib/portfolio-engine.mjs";
 import { accountReconstructionSchema, capsuleForReconstruction, validateAccountReconstruction } from "../lib/account-reconstruction.mjs";
 import { buildRwaCheckpoint } from "../lib/rwa-checkpoint.mjs";
-import { dueviaContracts, dueviaFinalRehearsal, dueviaGovernanceTransactions, dueviaProject, dueviaRelease, dueviaTakeoverAuthorization, dueviaTakeoverContracts, legacyRehearsalTransactions } from "../lib/deployment-evidence";
+import { dueviaContracts, dueviaFinalRehearsal, dueviaGovernanceTransactions, dueviaHardenedReplacement, dueviaProject, dueviaRelease, dueviaTakeoverAuthorization, dueviaTakeoverContracts, legacyRehearsalTransactions } from "../lib/deployment-evidence";
 
 interface Env {
   ASSETS: Fetcher;
@@ -504,6 +504,7 @@ async function evidenceApi(env: Env) {
     contracts: dueviaContracts,
     takeoverContracts: dueviaTakeoverContracts,
     takeoverAuthorization: dueviaTakeoverAuthorization,
+    hardenedReplacement: dueviaHardenedReplacement,
     governanceTransactions: dueviaGovernanceTransactions,
     governance: {
       coordinator,
