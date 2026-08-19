@@ -167,6 +167,22 @@ export default function InfrastructureDeployer({ wallet, registryAddress }: { wa
     if (Array.isArray(saved) && saved.length === 3 && saved.every((value) => typeof value === "string")) setGovernance(saved);
     const savedObservers = JSON.parse(localStorage.getItem("duevia-observer-addresses") || "null") as unknown;
     if (Array.isArray(savedObservers) && savedObservers.length === 3 && savedObservers.every((value) => typeof value === "string")) setObservers(savedObservers);
+    fetch("/api/evidence", { cache: "no-store" }).then(async (response) => {
+      if (!response.ok) return;
+      const evidence = await response.json() as { takeoverContracts?: Array<{ key: string; address: string }>; contracts?: Array<{ key: string; address: string }> };
+      const takeover = new Map((evidence.takeoverContracts || []).map((item) => [item.key, item.address]));
+      const governance = new Map((evidence.contracts || []).map((item) => [item.key, item.address]));
+      const verified = { rwaRegistry: takeover.get("rwaRegistry"), checkpointRegistry: takeover.get("checkpointRegistry"), incidentMachine: takeover.get("incidentStateMachine"), rwaVault: takeover.get("rwaVault"), recoveryAdapter: takeover.get("recoveryAdapterV2") };
+      if (verified.rwaRegistry) { setRwaRegistry(verified.rwaRegistry); localStorage.setItem("duevia-rwa-registry-v1", verified.rwaRegistry); }
+      if (verified.checkpointRegistry) { setCheckpointRegistry(verified.checkpointRegistry); localStorage.setItem("duevia-checkpoint-registry-v1", verified.checkpointRegistry); }
+      if (verified.incidentMachine) { setIncidentMachine(verified.incidentMachine); localStorage.setItem("duevia-incident-machine-v1", verified.incidentMachine); }
+      if (verified.rwaVault) { setRwaVault(verified.rwaVault); localStorage.setItem("duevia-rwa-vault-v1", verified.rwaVault); }
+      if (verified.recoveryAdapter) { setRecoveryAdapter(verified.recoveryAdapter); localStorage.setItem("duevia-recovery-adapter-v2-v1", verified.recoveryAdapter); }
+      const verifiedMultisig = governance.get("multisig");
+      const verifiedQuorum = governance.get("quorum");
+      if (verifiedMultisig) { setMultisig(verifiedMultisig); localStorage.setItem("duevia-recovery-multisig-v3", verifiedMultisig); }
+      if (verifiedQuorum) { setQuorum(verifiedQuorum); localStorage.setItem("duevia-observer-quorum-v3", verifiedQuorum); }
+    }).catch(() => undefined);
     Promise.all([fetch("/api/watchdog").then((response) => response.json()), fetch("/api/operations/health").then((response) => response.json()), fetch("/api/agent/health").then((response) => response.json()), fetch("/api/recovery").then((response) => response.json()), fetch("/api/execution").then((response) => response.json())]).then(([watchdog, operations, ai, recovery, execution]) => setRuntime({ persistent: Boolean(operations.persistent), operationsStatus: operations.status || "UNAVAILABLE", failoverStatus: operations.failover?.status || "UNPROVEN", keeperRuns: Array.isArray(watchdog.keeperRuns) ? watchdog.keeperRuns.length : 0, model: ai.mode || "unavailable", incidents: Array.isArray(watchdog.incidents) ? watchdog.incidents.length : 0, capsules: Array.isArray(recovery.capsules) ? recovery.capsules.length : 0, queuedActions: Array.isArray(execution.actions) ? execution.actions.length : 0 })).catch(() => setRuntime({ persistent: false, operationsStatus: "UNAVAILABLE", failoverStatus: "UNPROVEN", keeperRuns: 0, model: "unavailable", incidents: 0, capsules: 0, queuedActions: 0 }));
   }, []);
 
