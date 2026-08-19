@@ -15,6 +15,7 @@ import { portfolioDemo } from "@/lib/portfolio-demo.mjs";
 import AiInvestigator from "./ai-investigator";
 import ContinuityAgent, { type SuspensionResult, type VerificationResult } from "./continuity-agent";
 import InfrastructureDeployer from "./infrastructure-deployer";
+import TakeoverRuntime from "./takeover-runtime";
 
 type EthereumProvider = { request(args: { method: string; params?: unknown[] | Record<string, unknown> }): Promise<unknown> };
 type EvidenceCase = Record<string, unknown> & { asset: Record<string, unknown>; documents: unknown[] };
@@ -536,7 +537,7 @@ export default function DueviaWorkspace() {
       <header className="app-topbar"><div><span>ASSET / {report.caseId}</span><h1>{report.assetName}</h1></div><div className="app-actions"><button className="ghost-action" type="button" onClick={downloadReport}>Export attestation</button><button className="wallet-action" type="button" onClick={connectWallet}>{wallet ? shortAddress(wallet) : "Connect wallet"}</button></div></header>
       <nav className="workspace-tabs" aria-label="Asset views">{tabs.map((item) => <button key={item} type="button" className={tab === item ? "active" : ""} onClick={() => setTab(item)}>{item}</button>)}</nav>
       <div className="app-content">
-        {tab === "Continuity Agent" && <ContinuityAgent onPublishSuspended={publishContinuitySuspended} onPublishVerified={publishContinuityVerified} />}
+        {tab === "Continuity Agent" && <><ContinuityAgent onPublishSuspended={publishContinuitySuspended} onPublishVerified={publishContinuityVerified} /><TakeoverRuntime /></>}
         {tab === "AI Investigator" && <AiInvestigator report={portfolioReport} sourceName={portfolioSource} onOpenPortfolio={() => setTab("Portfolio controls")} />}
         {tab === "Portfolio controls" && <section className="portfolio-view">
           <div className="detail-heading portfolio-heading"><div><span>POLICY & EXECUTION</span><h2>{portfolioReport.poolName}</h2><p>The AI investigation layer resolves signals here into transparent eligibility controls and an executable pool state.</p></div><button className="ghost-action" type="button" onClick={() => setTab("AI Investigator")}>← Back to AI Investigator</button></div>

@@ -2,6 +2,9 @@
   "name": "duevia-rwa",
   "version": "0.1.0",
   "private": true,
+  "bin": {
+    "duevia": "bin/duevia.mjs"
+  },
   "engines": {
     "node": ">=22.13.0"
   },
@@ -17,6 +20,7 @@
     "bench:incidents": "node scripts/run-replay-benchmarks.mjs"
   },
   "dependencies": {
+    "@openzeppelin/contracts": "^5.4.0",
     "drizzle-orm": "0.45.2",
     "fast-xml-parser": "^5.11.0",
     "react": "^19.2.8",
