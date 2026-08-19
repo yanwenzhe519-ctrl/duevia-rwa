@@ -349,7 +349,7 @@ async function recoveryApi(request: Request, env: Env) {
 
 const AI_RATE_LIMIT = 10;
 const AI_RATE_WINDOW_MS = 60_000;
-const AI_RETRY_COOLDOWN_MS = 15 * 60_000;
+const AI_RETRY_COOLDOWN_MS = 5 * 60_000;
 
 function adminAuthorized(request: Request, env: Env) {
   return Boolean(env.WATCHDOG_ADMIN_TOKEN) && request.headers.get("Authorization") === `Bearer ${env.WATCHDOG_ADMIN_TOKEN}`;
@@ -573,19 +573,26 @@ async function performInvestigation(question: string, contextObject: unknown, en
     const evidenceIds = [...collectEvidenceIds(contextObject)];
     if (!evidenceIds.length) evidenceIds.push("context-root");
     const model = "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
-    const verifierModel = "@cf/meta/llama-3.1-8b-instruct-fast";
+    const verifierModel = "@cf/meta/llama-3.1-8b-instruct-fp8";
     const investigationShape = { schema: "duevia.ai-investigation/v1", incidentId: "string|null", summary: "string", riskLevel: "LOW|MEDIUM|HIGH|CRITICAL", facts: [{ claim: "string", evidenceIds: ["string"] }], inferences: [{ claim: "string", basis: "string", confidence: "LOW|MEDIUM|HIGH" }], missingEvidence: [{ item: "string", impact: "string" }], recommendedActions: [{ action: "string", reason: "string", requiresApproval: true }] };
     const investigationSchema = { type: "object", properties: { schema: { type: "string", const: "duevia.ai-investigation/v1" }, incidentId: { anyOf: [{ type: "string" }, { type: "null" }] }, summary: { type: "string" }, riskLevel: { type: "string", enum: ["LOW", "MEDIUM", "HIGH", "CRITICAL"] }, facts: { type: "array", items: { type: "object", properties: { claim: { type: "string" }, evidenceIds: { type: "array", items: { type: "string" } } }, required: ["claim", "evidenceIds"], additionalProperties: false } }, inferences: { type: "array", items: { type: "object", properties: { claim: { type: "string" }, basis: { type: "string" }, confidence: { type: "string", enum: ["LOW", "MEDIUM", "HIGH"] } }, required: ["claim", "basis", "confidence"], additionalProperties: false } }, missingEvidence: { type: "array", items: { type: "object", properties: { item: { type: "string" }, impact: { type: "string" } }, required: ["item", "impact"], additionalProperties: false } }, recommendedActions: { type: "array", items: { type: "object", properties: { action: { type: "string" }, reason: { type: "string" }, requiresApproval: { type: "boolean" } }, required: ["action", "reason", "requiresApproval"], additionalProperties: false } } }, required: ["schema", "incidentId", "summary", "riskLevel", "facts", "inferences", "missingEvidence", "recommendedActions"], additionalProperties: false };
-    let investigation: Record<string, unknown>;
-    try {
-      const output = await env.AI.run(model, { response_format: { type: "json_schema", json_schema: investigationSchema }, messages: [
-        { role: "system", content: "You are Duevia, an RWA continuity investigator. Return only valid JSON. Use only supplied evidence. Never claim legal ownership, audit assurance, repayment certainty, or permission to bypass deterministic policy. Every fact must cite one or more IDs from the supplied evidence catalog. Material actions must set requiresApproval=true." },
-        { role: "user", content: `${question}\n\nEvidence catalog: ${JSON.stringify(evidenceIds)}\nStructured evidence:\n${context}\n\nReturn this exact shape: ${JSON.stringify(investigationShape)}` },
-      ] });
-      investigation = modelResponseObject(output) as Record<string, unknown>;
-    } catch (error) {
+    let investigation: Record<string, unknown> | undefined;
+    let primaryError: unknown;
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        const output = await env.AI.run(model, { max_tokens: 2_048, temperature: 0, response_format: { type: "json_schema", json_schema: investigationSchema }, messages: [
+          { role: "system", content: "You are Duevia, an RWA continuity investigator. Return only valid JSON. Use only supplied evidence. Never claim legal ownership, audit assurance, repayment certainty, or permission to bypass deterministic policy. Include at least one supported fact, and cite one or more exact IDs from the supplied evidence catalog for every fact. Material actions must set requiresApproval=true." },
+          { role: "user", content: `${question}\n\nEvidence catalog: ${JSON.stringify(evidenceIds)}\nStructured evidence:\n${context}\n\nReturn this exact shape: ${JSON.stringify(investigationShape)}` },
+        ] });
+        investigation = modelResponseObject(output) as Record<string, unknown>;
+        break;
+      } catch (error) {
+        primaryError = error;
+      }
+    }
+    if (!investigation) {
       const incidentId = contextObject && typeof contextObject === "object" && "incident" in contextObject && contextObject.incident && typeof contextObject.incident === "object" && "incidentId" in contextObject.incident ? String(contextObject.incident.incidentId || "") : null;
-      investigation = failedInvestigation(incidentId, error instanceof Error ? error.message : String(error));
+      investigation = failedInvestigation(incidentId, primaryError instanceof Error ? primaryError.message : String(primaryError || "Workers AI did not return structured output."));
     }
     const deterministicValidation = validateInvestigation(investigation, evidenceIds);
     let modelValidation = { valid: false, violations: ["Verifier did not run."], reason: "" };
@@ -626,7 +633,7 @@ async function performAccountReconstruction(projectId: string, body: Record<stri
   const evidence = Array.isArray(body.evidence) ? body.evidence.slice(0, 500) : [];
   if (!incidentId || !evidence.length) throw new Error("incidentId and a non-empty evidence catalog are required.");
   const model = "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
-  const verifierModel = "@cf/meta/llama-3.1-8b-instruct-fast";
+  const verifierModel = "@cf/meta/llama-3.1-8b-instruct-fp8";
   const evidenceInput = { ...body, projectId, incidentId, evidence };
   const primary = await env.AI.run(model, {
     response_format: { type: "json_schema", json_schema: accountReconstructionSchema },
