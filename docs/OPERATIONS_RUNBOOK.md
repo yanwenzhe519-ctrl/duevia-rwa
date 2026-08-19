@@ -8,7 +8,7 @@ This runbook covers the hosted observation and recovery runtime. It does not aut
 - Degraded: no successful completion for 10 minutes, latest run failed, or the X Layer cursor is stale for 20 minutes.
 - Outage: no completion for 20 minutes or at least 3 consecutive Keeper failures. Total errors in the latest 24 runs remain visible as diagnostic metadata.
 - Adapter timeout: 8 seconds per endpoint; response body limit: 64 KB.
-- X Layer confirmation depth: 12 blocks.
+- X Layer confirmation depth: 12 blocks on the testnet scanner. Every stored checkpoint carries `finalityStatus`, `confirmationDepth`, and the RPC source so preconfirmed, confirmed, and finalized states cannot be conflated.
 
 `GET /api/operations/health` is the machine-readable health contract. It reports Keeper freshness, recent errors, scan-cursor age, lease activity, enabled project count, and whether two distinct Keeper trigger sources have completed successfully.
 
@@ -44,6 +44,7 @@ Generic HTTP availability is retained only as a weak endpoint signal. An HTTP 20
 
 1. Run lint, typecheck, contract compilation consistency, tests, incident benchmarks, and dependency audit.
 2. Apply additive D1 migrations before code that reads new columns.
+   Migration `0011_rwa_vault_address.sql` also pins `DUEVIA-RCV-018` to the RPC-verified takeover addresses and uses the RWA Vault as its scanner contract.
 3. Deploy the Worker and verify `/`, `/app`, `/proof`, `/api/agent/health`, and `/api/operations/health`.
 4. Keep the prior Cloudflare Worker version available during the observation window.
 5. If the release fails, roll traffic back to the prior Worker version. Do not reverse an applied D1 migration; migrations are additive and the previous Worker must tolerate extra columns.

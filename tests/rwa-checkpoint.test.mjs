@@ -7,11 +7,19 @@ const contractAddress = "0x2222222222222222222222222222222222222222";
 const event = (name, index, args, blockHash = "0xaaa") => ({ event: name, transactionHash: `0x${String(index + 1).padStart(64, "0")}`, logIndex: index, blockNumber: "10", blockHash, args: { account, ...args } });
 
 test("builds account, yield, and redemption roots from confirmed events", () => {
-  const checkpoint = buildRwaCheckpoint({ projectId: "sample", chainId: 1952, contractAddress, fromBlock: 10, toBlock: 10, confirmationBlock: 22, events: [event("Deposit", 0, { amount: "100" }), event("YieldAccrued", 1, { amount: "5" }), event("RedemptionRequested", 2, { requestId: "r1", amount: "20" })] });
+  const checkpoint = buildRwaCheckpoint({ projectId: "sample", chainId: 1952, contractAddress, fromBlock: 10, toBlock: 10, confirmationBlock: 22, confirmationDepth: 12, rpcUrl: "https://testrpc.xlayer.tech", events: [event("Deposit", 0, { amount: "100" }), event("YieldAccrued", 1, { amount: "5" }), event("RedemptionRequested", 2, { requestId: "r1", amount: "20" })] });
   assert.equal(checkpoint.accounts[0].principal, "100");
   assert.equal(checkpoint.accounts[0].yield, "5");
   assert.equal(checkpoint.accounts[0].pendingRedemption, "20");
+  assert.equal(checkpoint.finalityStatus, "CONFIRMED");
+  assert.equal(checkpoint.confirmationDepth, "12");
+  assert.equal(checkpoint.rpcUrl, "https://testrpc.xlayer.tech");
   assert.match(checkpoint.checkpointHash, /^0x[0-9a-f]{64}$/);
+});
+
+test("rejects unknown finality metadata", () => {
+  assert.throws(() => buildRwaCheckpoint({ projectId: "sample", chainId: 1952, contractAddress, fromBlock: 10, toBlock: 10, confirmationBlock: 10, finalityStatus: "UNKNOWN" }), /finality status/);
+  assert.throws(() => buildRwaCheckpoint({ projectId: "sample", chainId: 1952, contractAddress, fromBlock: 10, toBlock: 10, confirmationBlock: 10, confirmationDepth: "twelve" }), /confirmation depth/);
 });
 
 test("rejects reorg conflicts and duplicate redemption requests", () => {

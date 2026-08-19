@@ -16,7 +16,7 @@ import { verifyServicerFeedSignature } from "../lib/servicer-feed-security.mjs";
 import { analyzePortfolio } from "../lib/portfolio-engine.mjs";
 import { accountReconstructionSchema, capsuleForReconstruction, validateAccountReconstruction } from "../lib/account-reconstruction.mjs";
 import { buildRwaCheckpoint } from "../lib/rwa-checkpoint.mjs";
-import { dueviaContracts, dueviaFinalRehearsal, dueviaGovernanceTransactions, dueviaProject, dueviaRelease, legacyRehearsalTransactions } from "../lib/deployment-evidence";
+import { dueviaContracts, dueviaFinalRehearsal, dueviaGovernanceTransactions, dueviaProject, dueviaRelease, dueviaTakeoverAuthorization, dueviaTakeoverContracts, legacyRehearsalTransactions } from "../lib/deployment-evidence";
 
 interface Env {
   ASSETS: Fetcher;
@@ -140,7 +140,7 @@ async function runKeeperOnce(env: Env, startedAt: string, triggerSource: string,
         } catch {
           await persistObservation(env.WATCHDOG_DB, { observationId: `checkpoint-previous-invalid:${project.pool_id}:${Date.now()}`, poolId: project.pool_id, source: "checkpoint-engine", event: "PreviousCheckpointInvalid" });
         }
-        const checkpoint = buildRwaCheckpoint({ projectId: String(project.pool_id), chainId: scan.chainId, contractAddress: String(project.contract_address), fromBlock: scan.fromBlock, toBlock: scan.toBlock, confirmationBlock: scan.toBlock, events: scan.observations.filter((observation) => String(observation.address).toLowerCase() === String(project.contract_address).toLowerCase()), previousAccounts, previousRedemptions });
+        const checkpoint = buildRwaCheckpoint({ projectId: String(project.pool_id), chainId: scan.chainId, contractAddress: String(project.contract_address), fromBlock: scan.fromBlock, toBlock: scan.toBlock, confirmationBlock: scan.toBlock, finalityStatus: "CONFIRMED", confirmationDepth: scan.confirmations, rpcUrl: scan.rpcUrl, events: scan.observations.filter((observation) => String(observation.address).toLowerCase() === String(project.contract_address).toLowerCase()), previousAccounts, previousRedemptions });
         const checkpointId = `${project.pool_id}:${checkpoint.toBlock}`;
         const statements = [env.WATCHDOG_DB.prepare("INSERT OR IGNORE INTO rwa_checkpoints (checkpoint_id, project_id, chain_id, contract_address, from_block, to_block, confirmation_block, checkpoint_hash, checkpoint_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").bind(checkpointId, project.pool_id, checkpoint.chainId, checkpoint.contractAddress, checkpoint.fromBlock, checkpoint.toBlock, checkpoint.confirmationBlock, checkpoint.checkpointHash, JSON.stringify(checkpoint), startedAt)];
         for (const account of checkpoint.accounts) statements.push(env.WATCHDOG_DB.prepare("INSERT INTO rwa_account_states (project_id, account, checkpoint_id, principal, yield_amount, pending_redemption, evidence_json, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(project_id, account) DO UPDATE SET checkpoint_id=excluded.checkpoint_id, principal=excluded.principal, yield_amount=excluded.yield_amount, pending_redemption=excluded.pending_redemption, evidence_json=excluded.evidence_json, updated_at=excluded.updated_at").bind(project.pool_id, account.account, checkpointId, account.principal, account.yield, account.pendingRedemption, JSON.stringify({ checkpointHash: checkpoint.checkpointHash, evidenceRoot: checkpoint.evidenceRoot }), startedAt));
@@ -262,7 +262,7 @@ async function runKeeperOnce(env: Env, startedAt: string, triggerSource: string,
 
 async function projectsApi(request: Request, env: Env) {
   if (request.method === "GET") {
-    const projects = await env.WATCHDOG_DB.prepare("SELECT pool_id, servicer_id, contract_address, sla_hours, grace_hours, last_heartbeat_at, enabled, created_at, updated_at, project_name, public_endpoint, observer_endpoints_json, last_state, consecutive_outage_runs, shadow_mode, automatic_suspension, coordinator_address, registry_address, rwa_registry_address, checkpoint_registry_address, incident_machine_address, adapter_address FROM projects ORDER BY created_at DESC").all<Record<string, unknown>>();
+    const projects = await env.WATCHDOG_DB.prepare("SELECT pool_id, servicer_id, contract_address, sla_hours, grace_hours, last_heartbeat_at, enabled, created_at, updated_at, project_name, public_endpoint, observer_endpoints_json, last_state, consecutive_outage_runs, shadow_mode, automatic_suspension, coordinator_address, registry_address, rwa_registry_address, checkpoint_registry_address, incident_machine_address, rwa_vault_address, adapter_address FROM projects ORDER BY created_at DESC").all<Record<string, unknown>>();
     return Response.json({ ok: true, projects: projects.results.map((project) => { let observerEndpointCount = 0; try { observerEndpointCount = JSON.parse(String(project.observer_endpoints_json || "[]")).length; } catch { /* Invalid stored data is reported as zero endpoints. */ } const safe = { ...project }; delete safe.observer_endpoints_json; return { ...safe, observerEndpointCount }; }) }, { headers: { "Cache-Control": "no-store" } });
   }
   if (request.method !== "POST") return new Response("Method Not Allowed", { status: 405 });
@@ -276,8 +276,8 @@ async function projectsApi(request: Request, env: Env) {
   const snapshotJson = body.snapshot && typeof body.snapshot === "object" ? JSON.stringify(body.snapshot) : null;
   const observerEndpoints = normalizeObserverEndpoints(body.observerEndpoints);
   const publicEndpoint = normalizePublicEndpoint(body.publicEndpoint);
-  await env.WATCHDOG_DB.prepare("INSERT INTO projects (pool_id, servicer_id, contract_address, sla_hours, grace_hours, last_heartbeat_at, enabled, created_at, updated_at, project_name, intelligence_query, public_endpoint, snapshot_json, shadow_mode, automatic_suspension, coordinator_address, registry_address, rwa_registry_address, checkpoint_registry_address, incident_machine_address, adapter_address, observer_endpoints_json) VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(pool_id) DO UPDATE SET servicer_id=excluded.servicer_id, contract_address=excluded.contract_address, sla_hours=excluded.sla_hours, grace_hours=excluded.grace_hours, last_heartbeat_at=excluded.last_heartbeat_at, enabled=1, updated_at=excluded.updated_at, project_name=excluded.project_name, intelligence_query=excluded.intelligence_query, public_endpoint=excluded.public_endpoint, snapshot_json=COALESCE(excluded.snapshot_json, projects.snapshot_json), shadow_mode=excluded.shadow_mode, automatic_suspension=excluded.automatic_suspension, coordinator_address=COALESCE(excluded.coordinator_address, projects.coordinator_address), registry_address=COALESCE(excluded.registry_address, projects.registry_address), rwa_registry_address=COALESCE(excluded.rwa_registry_address, projects.rwa_registry_address), checkpoint_registry_address=COALESCE(excluded.checkpoint_registry_address, projects.checkpoint_registry_address), incident_machine_address=COALESCE(excluded.incident_machine_address, projects.incident_machine_address), adapter_address=COALESCE(excluded.adapter_address, projects.adapter_address), observer_endpoints_json=excluded.observer_endpoints_json")
-    .bind(poolId, servicerId, body.contractAddress || null, Number(body.slaHours || 24), Number(body.graceHours || 6), lastHeartbeatAt, now, now, body.projectName || null, body.intelligenceQuery || null, publicEndpoint, snapshotJson, body.shadowMode === false ? 0 : 1, body.automaticSuspension === true ? 1 : 0, body.coordinatorAddress || null, body.registryAddress || null, body.rwaRegistryAddress || null, body.checkpointRegistryAddress || null, body.incidentMachineAddress || null, body.adapterAddress || null, JSON.stringify(observerEndpoints)).run();
+  await env.WATCHDOG_DB.prepare("INSERT INTO projects (pool_id, servicer_id, contract_address, sla_hours, grace_hours, last_heartbeat_at, enabled, created_at, updated_at, project_name, intelligence_query, public_endpoint, snapshot_json, shadow_mode, automatic_suspension, coordinator_address, registry_address, rwa_registry_address, checkpoint_registry_address, incident_machine_address, rwa_vault_address, adapter_address, observer_endpoints_json) VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(pool_id) DO UPDATE SET servicer_id=excluded.servicer_id, contract_address=excluded.contract_address, sla_hours=excluded.sla_hours, grace_hours=excluded.grace_hours, last_heartbeat_at=excluded.last_heartbeat_at, enabled=1, updated_at=excluded.updated_at, project_name=excluded.project_name, intelligence_query=excluded.intelligence_query, public_endpoint=excluded.public_endpoint, snapshot_json=COALESCE(excluded.snapshot_json, projects.snapshot_json), shadow_mode=excluded.shadow_mode, automatic_suspension=excluded.automatic_suspension, coordinator_address=COALESCE(excluded.coordinator_address, projects.coordinator_address), registry_address=COALESCE(excluded.registry_address, projects.registry_address), rwa_registry_address=COALESCE(excluded.rwa_registry_address, projects.rwa_registry_address), checkpoint_registry_address=COALESCE(excluded.checkpoint_registry_address, projects.checkpoint_registry_address), incident_machine_address=COALESCE(excluded.incident_machine_address, projects.incident_machine_address), rwa_vault_address=COALESCE(excluded.rwa_vault_address, projects.rwa_vault_address), adapter_address=COALESCE(excluded.adapter_address, projects.adapter_address), observer_endpoints_json=excluded.observer_endpoints_json")
+    .bind(poolId, servicerId, body.contractAddress || null, Number(body.slaHours || 24), Number(body.graceHours || 6), lastHeartbeatAt, now, now, body.projectName || null, body.intelligenceQuery || null, publicEndpoint, snapshotJson, body.shadowMode === false ? 0 : 1, body.automaticSuspension === true ? 1 : 0, body.coordinatorAddress || null, body.registryAddress || null, body.rwaRegistryAddress || null, body.checkpointRegistryAddress || null, body.incidentMachineAddress || null, body.rwaVaultAddress || null, body.adapterAddress || null, JSON.stringify(observerEndpoints)).run();
   return Response.json({ ok: true, poolId });
 }
 
@@ -434,6 +434,24 @@ function safeCapsuleSummary(row: Record<string, unknown>) {
   };
 }
 
+function safeCheckpointSummary(row: Record<string, unknown>) {
+  const checkpoint = parseJsonRecord(row.checkpoint_json);
+  return {
+    checkpointId: row.checkpoint_id,
+    projectId: row.project_id,
+    chainId: Number(row.chain_id),
+    contractAddress: row.contract_address,
+    fromBlock: row.from_block,
+    toBlock: row.to_block,
+    confirmationBlock: row.confirmation_block,
+    checkpointHash: row.checkpoint_hash,
+    finalityStatus: String(checkpoint.finalityStatus || "UNKNOWN"),
+    confirmationDepth: checkpoint.confirmationDepth == null ? null : String(checkpoint.confirmationDepth),
+    rpcUrl: typeof checkpoint.rpcUrl === "string" ? checkpoint.rpcUrl : null,
+    createdAt: row.created_at,
+  };
+}
+
 async function evidenceApi(env: Env) {
   let projects: unknown[] = [];
   let incidents: unknown[] = [];
@@ -444,7 +462,7 @@ async function evidenceApi(env: Env) {
   let runtimeEvidenceAvailable = true;
   try {
     const results = await Promise.all([
-      env.WATCHDOG_DB.prepare("SELECT pool_id, servicer_id, contract_address, coordinator_address, registry_address, last_state, consecutive_outage_runs, updated_at FROM projects ORDER BY updated_at DESC LIMIT 50").all(),
+      env.WATCHDOG_DB.prepare("SELECT pool_id, servicer_id, contract_address, coordinator_address, registry_address, rwa_registry_address, checkpoint_registry_address, incident_machine_address, rwa_vault_address, adapter_address, last_state, consecutive_outage_runs, updated_at FROM projects ORDER BY updated_at DESC LIMIT 50").all(),
       env.WATCHDOG_DB.prepare("SELECT incident_id, pool_id, state, opened_at, updated_at, recovery_root FROM incidents ORDER BY updated_at DESC LIMIT 50").all(),
       env.WATCHDOG_DB.prepare("SELECT recovery_root, incident_id, pool_id, state, created_at FROM recovery_capsules ORDER BY created_at DESC LIMIT 50").all(),
       env.WATCHDOG_DB.prepare("SELECT run_id, started_at, finished_at, from_block, to_block, observations, status, trigger_source FROM keeper_runs ORDER BY started_at DESC LIMIT 20").all(),
@@ -484,6 +502,8 @@ async function evidenceApi(env: Env) {
     },
     project: dueviaProject,
     contracts: dueviaContracts,
+    takeoverContracts: dueviaTakeoverContracts,
+    takeoverAuthorization: dueviaTakeoverAuthorization,
     governanceTransactions: dueviaGovernanceTransactions,
     governance: {
       coordinator,
@@ -644,14 +664,14 @@ async function takeoverApi(request: Request, env: Env, projectId: string, tail: 
     }
   }
   if (request.method === "GET" && segments[0] === "status") {
-    const project = await env.WATCHDOG_DB.prepare("SELECT pool_id, servicer_id, contract_address, last_state, last_heartbeat_at, shadow_mode FROM projects WHERE pool_id = ?").bind(projectId).first<Record<string, unknown>>();
+    const project = await env.WATCHDOG_DB.prepare("SELECT pool_id, servicer_id, contract_address, rwa_registry_address, checkpoint_registry_address, incident_machine_address, rwa_vault_address, adapter_address, last_state, last_heartbeat_at, shadow_mode FROM projects WHERE pool_id = ?").bind(projectId).first<Record<string, unknown>>();
     if (!project) return Response.json({ ok: false, error: "RWA project not found." }, { status: 404 });
     const incident = await env.WATCHDOG_DB.prepare("SELECT incident_id, state, recovery_root, updated_at FROM incidents WHERE pool_id = ? ORDER BY updated_at DESC LIMIT 1").bind(projectId).first<Record<string, unknown>>();
     return Response.json({ ok: true, projectId, project, incident, runtime: incident ? "TAKEOVER" : "PRIMARY_SERVICER" }, { headers: { "Cache-Control": "no-store" } });
   }
   if (request.method === "GET" && segments[0] === "checkpoints") {
-    const rows = await env.WATCHDOG_DB.prepare("SELECT checkpoint_id, chain_id, contract_address, from_block, to_block, confirmation_block, checkpoint_hash, created_at FROM rwa_checkpoints WHERE project_id = ? ORDER BY created_at DESC LIMIT 100").bind(projectId).all();
-    return Response.json({ ok: true, projectId, checkpoints: rows.results }, { headers: { "Cache-Control": "no-store" } });
+    const rows = await env.WATCHDOG_DB.prepare("SELECT checkpoint_id, project_id, chain_id, contract_address, from_block, to_block, confirmation_block, checkpoint_hash, checkpoint_json, created_at FROM rwa_checkpoints WHERE project_id = ? ORDER BY created_at DESC LIMIT 100").bind(projectId).all<Record<string, unknown>>();
+    return Response.json({ ok: true, projectId, checkpoints: rows.results.map(safeCheckpointSummary) }, { headers: { "Cache-Control": "no-store" } });
   }
   if (request.method === "GET" && segments[0] === "accounts" && !segments[1]) {
     const rows = await env.WATCHDOG_DB.prepare("SELECT project_id, account, checkpoint_id, principal, yield_amount, pending_redemption, evidence_json, updated_at FROM rwa_account_states WHERE project_id = ? ORDER BY account ASC LIMIT 200").bind(projectId).all<Record<string, unknown>>();

@@ -4,10 +4,10 @@
 
 - Project: Duevia Continuity Agent
 - Category: AI + RWA
-- Public website: `https://duevia-rwa.cardrevive-agent.workers.dev`
-- Public DApp: `https://duevia-rwa.cardrevive-agent.workers.dev/app`
-- Public evidence: `https://duevia-rwa.cardrevive-agent.workers.dev/proof`
-- Machine-readable evidence: `https://duevia-rwa.cardrevive-agent.workers.dev/api/evidence`
+- Public website: `https://duevia.finance`
+- Public DApp: `https://duevia.finance/app`
+- Public evidence: `https://duevia.finance/proof`
+- Machine-readable evidence: `https://duevia.finance/api/evidence`
 - Source: `https://github.com/yanwenzhe519-ctrl/duevia-rwa`
 - Network: X Layer Testnet, chain ID `1952`
 
@@ -53,6 +53,20 @@ Governance evidence:
 - Pending global and project owners are zero addresses.
 - Bootstrap global Attestor and Operator roles are revoked.
 - Project-scoped Attestor and Operator roles remain enabled for the explicitly authorized rehearsal wallet.
+
+## RWA takeover stack
+
+The five immutable takeover contracts and the adapter authorization are published by `/api/evidence`. RPC verification binds each CREATE2 init code to its generated artifact rather than inferring contract identity from transaction order.
+
+| Contract | Address | Deployment transaction |
+| --- | --- | --- |
+| RWA Registry | `0xaeCA0FEe07Debea353eB0728EdD1e9D917a94297` | `0x0e0e641563022e0e954336433bc154dda531f54346d38ebd8ebc37da002dcc52` |
+| Checkpoint Registry | `0x9fB26d32750f387c75F9577135a6E274730759D2` | `0xa1fdfeebe9ecd171830e608aa1e28b1431c282b50ce14361fbc7369cfb63708b` |
+| Incident State Machine | `0xBb9dfb771248594A365cabe0114cf362d68279a7` | `0x39cab15d8fbc19900de93a85bde2d1308a72cea93dcc9960b27f3e175204cbe7` |
+| RWA Vault | `0x00344E2e44AFf7cF7429738E99Fd056a099A077F` | `0xd2e6125197c1c1e918903e3b2143d23c955f1784c1d90645152916791a934df2` |
+| Recovery Adapter V2 | `0x3d901880b9416ad7b00569C7b0B67b8e8008d6Af` | `0x10265dc4b640926ec50a28b8374099a8ae02ee592bb7e464d5b2d32dfc36b8bb` |
+
+Adapter authorization transaction `0x7ca1b72c541b4179dae61d793a423d8adc7103c6c99f54b0c900360b7ecebf71` grants `keccak256("ADAPTER_ROLE")` on the RWA Vault to Recovery Adapter V2 and emits the matching `RoleGranted` event.
 
 ## Final-stack incident rehearsal
 

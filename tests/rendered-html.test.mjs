@@ -22,6 +22,8 @@ test("the public site uses Duevia RWA agentic investigation messaging", async ()
   assert.match(route, /Request body must be valid JSON/);
   assert.match(route, /Cache-Control.*no-store/);
   assert.match(layout, /Duevia RWA/);
+  assert.match(layout, /https:\/\/duevia\.finance/);
+  assert.doesNotMatch(layout, /cardrevive-agent\.workers\.dev/);
   assert.doesNotMatch(page, /ProofFlow|Starter Project|codex-preview/);
 });
 
@@ -199,10 +201,11 @@ test("the deployed worker includes durable operations hardening", async () => {
 });
 
 test("takeover writes require authorization and AI health is explicit about readiness", async () => {
-  const [worker, health, migration] = await Promise.all([
+  const [worker, health, migration, vaultMigration] = await Promise.all([
     readFile(new URL("../worker/index.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/api/agent/health/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../drizzle/0010_api_rate_limits.sql", import.meta.url), "utf8"),
+    readFile(new URL("../drizzle/0011_rwa_vault_address.sql", import.meta.url), "utf8"),
   ]);
   assert.match(worker, /function adminAuthorized/);
   assert.match(worker, /consumeAiRateLimit/);
@@ -210,4 +213,9 @@ test("takeover writes require authorization and AI health is explicit about read
   assert.match(worker, /CONFIGURED_UNVERIFIED/);
   assert.match(health, /CONFIGURED_UNVERIFIED/);
   assert.match(migration, /CREATE TABLE IF NOT EXISTS api_rate_limits/);
+  assert.match(worker, /rwa_vault_address/);
+  assert.match(worker, /finalityStatus/);
+  assert.match(vaultMigration, /ADD COLUMN rwa_vault_address/);
+  assert.match(vaultMigration, /WHERE pool_id = 'DUEVIA-RCV-018'/);
+  assert.match(worker, /takeoverAuthorization/);
 });

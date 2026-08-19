@@ -35,6 +35,20 @@ This runbook applies to the current continuity contracts. Existing legacy Regist
 8. Prove the same Pool accepts a minimal deposit only after both attestation and incident are eligible.
 9. Record every address, transaction hash, block number, Git commit, and Recovery Root in the public evidence page.
 
+## Verified RWA takeover deployment
+
+The following X Layer Testnet records were verified from RPC receipts and CREATE2 calldata. Each init code matches exactly one generated artifact; the computed CREATE2 address had no code in the preceding block and the recorded runtime bytecode in the deployment block.
+
+| Artifact | Address | Deployment transaction | Block |
+| --- | --- | --- | --- |
+| `DueviaRwaRegistry` | `0xaeCA0FEe07Debea353eB0728EdD1e9D917a94297` | `0x0e0e641563022e0e954336433bc154dda531f54346d38ebd8ebc37da002dcc52` | `38705557` |
+| `DueviaCheckpointRegistry` | `0x9fB26d32750f387c75F9577135a6E274730759D2` | `0xa1fdfeebe9ecd171830e608aa1e28b1431c282b50ce14361fbc7369cfb63708b` | `38705571` |
+| `DueviaIncidentStateMachine` | `0xBb9dfb771248594A365cabe0114cf362d68279a7` | `0x39cab15d8fbc19900de93a85bde2d1308a72cea93dcc9960b27f3e175204cbe7` | `38705583` |
+| `DueviaRwaVault` | `0x00344E2e44AFf7cF7429738E99Fd056a099A077F` | `0xd2e6125197c1c1e918903e3b2143d23c955f1784c1d90645152916791a934df2` | `38705607` |
+| `DueviaRecoveryAdapterV2` | `0x3d901880b9416ad7b00569C7b0B67b8e8008d6Af` | `0x10265dc4b640926ec50a28b8374099a8ae02ee592bb7e464d5b2d32dfc36b8bb` | `38705619` |
+
+Transaction `0x7ca1b72c541b4179dae61d793a423d8adc7103c6c99f54b0c900360b7ecebf71` succeeded in block `38705686`. Its account-abstraction inner call targets the RWA Vault and calls `grantRole`. The receipt emits `RoleGranted` for role `0xdbeb657137b1822b3d5418bea6fd641226d964b4c3871ef23546db2622258871` (`keccak256("ADAPTER_ROLE")`) to Recovery Adapter V2.
+
 ## Mainnet prohibition
 
 Do not deploy to mainnet or enable automatic broadcasting until an independent contract audit, key-management review, incident-response exercise, real data adapter pilot, gas policy, and rollback plan have been completed.

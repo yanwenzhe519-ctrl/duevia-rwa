@@ -1,9 +1,29 @@
-export const dueviaRelease = "duevia-rwa/2026.08.18";
+export const dueviaRelease = "duevia-rwa/2026.08.20";
 
 export const dueviaProject = {
+  poolId: "DUEVIA-RCV-018",
   chainId: 1952,
   projectId: "0x5c939e6382044f5bf74e865f5b497f038c90ec9dc65b96b36bd8b5d434ab3477",
   multisigOwner: "0x11d698C4b9771BEc4C3DF7F27D07d2D9bEC7BB3c",
+} as const;
+
+export const dueviaTakeoverContracts = [
+  { key: "rwaRegistry", label: "RWA Registry", address: "0xaeCA0FEe07Debea353eB0728EdD1e9D917a94297", deploymentTransaction: "0x0e0e641563022e0e954336433bc154dda531f54346d38ebd8ebc37da002dcc52", deploymentBlock: 38705557, bytecodeHash: "0xde28e065e28dbe7be82a3ffe205f85faabc42589ed7bf231c56bff03bdf717dc" },
+  { key: "checkpointRegistry", label: "Checkpoint Registry", address: "0x9fB26d32750f387c75F9577135a6E274730759D2", deploymentTransaction: "0xa1fdfeebe9ecd171830e608aa1e28b1431c282b50ce14361fbc7369cfb63708b", deploymentBlock: 38705571, bytecodeHash: "0x3f2a6ebdefddcf4b13c426fe12af70970972f9ec2531d87e9e695c9a7c6a47e2" },
+  { key: "incidentStateMachine", label: "Incident State Machine", address: "0xBb9dfb771248594A365cabe0114cf362d68279a7", deploymentTransaction: "0x39cab15d8fbc19900de93a85bde2d1308a72cea93dcc9960b27f3e175204cbe7", deploymentBlock: 38705583, bytecodeHash: "0x89cf28461730a27db5b185300a40c3ad61c6ab513766282fa308d75b9e1f39b4" },
+  { key: "rwaVault", label: "RWA Vault", address: "0x00344E2e44AFf7cF7429738E99Fd056a099A077F", deploymentTransaction: "0xd2e6125197c1c1e918903e3b2143d23c955f1784c1d90645152916791a934df2", deploymentBlock: 38705607, bytecodeHash: "0xcb018f8373bfb7ea0b329f9e2845c4f267c63caaf65f2f9bea007fbab70a789d" },
+  { key: "recoveryAdapterV2", label: "Recovery Adapter V2", address: "0x3d901880b9416ad7b00569C7b0B67b8e8008d6Af", deploymentTransaction: "0x10265dc4b640926ec50a28b8374099a8ae02ee592bb7e464d5b2d32dfc36b8bb", deploymentBlock: 38705619, bytecodeHash: "0xd527a7bfb19628a235a7b8d44d4b35f0283003d521feaba4e647ace22807d9c9" },
+] as const;
+
+export const dueviaTakeoverAuthorization = {
+  transaction: "0x7ca1b72c541b4179dae61d793a423d8adc7103c6c99f54b0c900360b7ecebf71",
+  blockNumber: 38705686,
+  target: "0x00344E2e44AFf7cF7429738E99Fd056a099A077F",
+  event: "RoleGranted",
+  role: "0xdbeb657137b1822b3d5418bea6fd641226d964b4c3871ef23546db2622258871",
+  roleLabel: "ADAPTER_ROLE",
+  account: "0x3d901880b9416ad7b00569C7b0B67b8e8008d6Af",
+  sender: "0x05667DE34Ad47bAFe8a8b976c19809cAdf7719D2",
 } as const;
 
 export const dueviaContracts = [
