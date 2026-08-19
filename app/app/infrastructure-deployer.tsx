@@ -275,6 +275,39 @@ export default function InfrastructureDeployer({ wallet, registryAddress }: { wa
     finally { setRunning(false); }
   };
 
+  const revokeTakeoverRoleData = (contractKey: keyof typeof verifiedTakeoverContracts, roleName: string) => {
+    const address = verifiedTakeoverContracts[contractKey] as Address;
+    const abi = contractKey === "rwaRegistry" ? dueviaRwaRegistryAbi : contractKey === "checkpointRegistry" ? dueviaCheckpointRegistryAbi : contractKey === "incidentStateMachine" ? dueviaIncidentStateMachineAbi : contractKey === "rwaVault" ? dueviaRwaVaultAbi : dueviaRecoveryAdapterV2Abi;
+    const role = (roleName === "DEFAULT_ADMIN_ROLE" ? `0x${"0".repeat(64)}` : keccak256(stringToHex(roleName))) as Hex;
+    return { address, abi, data: encodeFunctionData({ abi, functionName: "revokeRole", args: [role, projectWallet as Address] }) };
+  };
+
+  const approveTakeoverRoleRevoke = async (contractKey: keyof typeof verifiedTakeoverContracts, roleName: string, label: string) => {
+    setRunning(true);
+    try {
+      const account = await activeAccount();
+      if (!governance.some((value) => value.toLowerCase() === account.toLowerCase())) throw new Error("Connect one of the configured governance signers");
+      if (!isAddress(multisig)) throw new Error("Verified Recovery Multisig is not loaded");
+      const call = revokeTakeoverRoleData(contractKey, roleName);
+      const result = await write(account, multisig as Address, dueviaRecoveryMultisigAbi, "approve", [call.address, BigInt(0), call.data]);
+      setNotice(`${label} revoke approved by ${account} · ${result.hash}`);
+    } catch (error) { setNotice(`${label} revoke approval failed: ${(error instanceof Error ? error.message : String(error)).slice(0, 240)}`); }
+    finally { setRunning(false); }
+  };
+
+  const executeTakeoverRoleRevoke = async (contractKey: keyof typeof verifiedTakeoverContracts, roleName: string, label: string) => {
+    setRunning(true);
+    try {
+      const account = await activeAccount();
+      if (!governance.some((value) => value.toLowerCase() === account.toLowerCase())) throw new Error("Connect one of the configured governance signers");
+      if (!isAddress(multisig)) throw new Error("Verified Recovery Multisig is not loaded");
+      const call = revokeTakeoverRoleData(contractKey, roleName);
+      const result = await write(account, multisig as Address, dueviaRecoveryMultisigAbi, "execute", [call.address, BigInt(0), call.data]);
+      setNotice(`${label} revoke executed by Recovery Multisig · ${result.hash}`);
+    } catch (error) { setNotice(`${label} revoke execution failed: ${(error instanceof Error ? error.message : String(error)).slice(0, 240)}`); }
+    finally { setRunning(false); }
+  };
+
   const startOwnershipTransfer = async () => {
     setRunning(true);
     try {
@@ -425,6 +458,11 @@ export default function InfrastructureDeployer({ wallet, registryAddress }: { wa
       <div className="governance-heading"><span>TAKEOVER GOVERNANCE HANDOFF · TESTNET</span><strong>GRANT BEFORE REVOKE</strong></div>
       <p className="proof-note">These controls use the RPC-verified takeover addresses and the already deployed Recovery Multisig. Each button sends one role grant; bootstrap permissions are not revoked automatically.</p>
       <div className="governance-actions takeover-role-actions">{takeoverRolePlan.map(([label, key, role]) => <div key={`${key}-${role}`}><span>{label} · {role}</span><button type="button" onClick={() => void grantTakeoverRole(key, role, `${label} ${role}`)} disabled={running}>Grant</button></div>)}</div>
+    </div>
+    <div className="governance-console">
+      <div className="governance-heading"><span>BOOTSTRAP ROLE REVOCATION · 2-OF-3</span><strong>APPROVE TWICE, THEN EXECUTE</strong></div>
+      <p className="proof-note">Use two different configured governance signers. Revoke named roles first; revoke DEFAULT_ADMIN_ROLE last for each contract. No revoke is automatic.</p>
+      <div className="governance-actions takeover-role-actions">{[...takeoverRolePlan].sort((a, b) => (a[2] === "DEFAULT_ADMIN_ROLE" ? 1 : 0) - (b[2] === "DEFAULT_ADMIN_ROLE" ? 1 : 0)).map(([label, key, role]) => <div key={`revoke-${key}-${role}`}><span>{label} · {role}</span><button type="button" onClick={() => void approveTakeoverRoleRevoke(key, role, `${label} ${role}`)} disabled={running || !isAddress(multisig)}>Approve revoke</button><button type="button" onClick={() => void executeTakeoverRoleRevoke(key, role, `${label} ${role}`)} disabled={running || !isAddress(multisig)}>Execute revoke</button></div>)}</div>
     </div>
     <div className="continuity-buttons"><button className="upload-package" type="button" onClick={() => deploy("coordinator")} disabled={running || Boolean(coordinator)}>Deploy Coordinator</button><button className="upload-package" type="button" onClick={() => deploy("guard")} disabled={running || !coordinator || !registryAddress || Boolean(continuityGuard)}>Deploy Dual Guard</button><button className="anchor-button" type="button" onClick={() => deploy("pool")} disabled={running || !continuityGuard || Boolean(continuityPool)}>Deploy Continuity Pool</button></div>
     <div className="governance-console">
