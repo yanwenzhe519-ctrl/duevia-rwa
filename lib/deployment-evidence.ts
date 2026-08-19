@@ -44,7 +44,20 @@ export const dueviaHardenedReplacement = {
     vault: "0x437Fcbb7b474036FB534e0AFFafdB600D970d798",
     replaces: "0x3d901880b9416ad7b00569C7b0B67b8e8008d6Af",
   },
-  adapterRoleGranted: false,
+  adapterRoleGranted: {
+    transaction: "0x7d965a10de38098d1b934b72d51bdd71d0150505444bea917e073e495b0e3477",
+    blockNumber: 38720781,
+    target: "0x437Fcbb7b474036FB534e0AFFafdB600D970d798",
+    role: "0xdbeb657137b1822b3d5418bea6fd641226d964b4c3871ef23546db2622258871",
+    account: "0xeA1dbe4F4F8640214C1538210B494F5850537599",
+    sender: "0x11d698C4b9771BEc4C3DF7F27D07d2D9bEC7BB3c",
+    multisigTransactionHash: "0x0c0a92d2d66dd4cb7708cd7597ae6fd4a5cd970e864d9465e42712b0a131f81d",
+    nonce: 18,
+    approvals: [
+      { transaction: "0x66bf46a92c2de2e04bad7c9e1b0085f10078fff43d445df3f529185db07f9c7c", signer: "0x05667DE34Ad47bAFe8a8b976c19809cAdf7719D2", approvalCount: 1 },
+      { transaction: "0x7127f090c2a37e0b1f37090b068765ab2ebe4e231b01e32785ba871ca4cb5f66", signer: "0xcf4f92fBe73Fb01de45CDC4E370126963C851b51", approvalCount: 2 },
+    ],
+  },
 } as const;
 
 export const dueviaContracts = [

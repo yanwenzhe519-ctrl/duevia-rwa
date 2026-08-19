@@ -131,6 +131,7 @@ export default function InfrastructureDeployer({ wallet, registryAddress }: { wa
   const [recoveryAdapter, setRecoveryAdapter] = useState("");
   const [hardenedVault, setHardenedVault] = useState("");
   const [hardenedAdapter, setHardenedAdapter] = useState("");
+  const [hardenedAdapterAuthorized, setHardenedAdapterAuthorized] = useState(false);
   const [governance, setGovernance] = useState(governanceWallets);
   const [observers, setObservers] = useState(observerWallets);
   const [independenceConfirmed, setIndependenceConfirmed] = useState(false);
@@ -173,7 +174,7 @@ export default function InfrastructureDeployer({ wallet, registryAddress }: { wa
     if (Array.isArray(savedObservers) && savedObservers.length === 3 && savedObservers.every((value) => typeof value === "string")) setObservers(savedObservers);
     fetch("/api/evidence", { cache: "no-store" }).then(async (response) => {
       if (!response.ok) return;
-      const evidence = await response.json() as { takeoverContracts?: Array<{ key: string; address: string }>; contracts?: Array<{ key: string; address: string }>; hardenedReplacement?: { vault?: { address?: string }; adapter?: { address?: string } } };
+      const evidence = await response.json() as { takeoverContracts?: Array<{ key: string; address: string }>; contracts?: Array<{ key: string; address: string }>; hardenedReplacement?: { vault?: { address?: string }; adapter?: { address?: string }; adapterRoleGranted?: boolean | Record<string, unknown> } };
       const takeover = new Map((evidence.takeoverContracts || []).map((item) => [item.key, item.address]));
       const governance = new Map((evidence.contracts || []).map((item) => [item.key, item.address]));
       const verified = { rwaRegistry: takeover.get("rwaRegistry"), checkpointRegistry: takeover.get("checkpointRegistry"), incidentMachine: takeover.get("incidentStateMachine"), rwaVault: takeover.get("rwaVault"), recoveryAdapter: takeover.get("recoveryAdapterV2") };
@@ -186,6 +187,7 @@ export default function InfrastructureDeployer({ wallet, registryAddress }: { wa
       const verifiedHardenedAdapter = evidence.hardenedReplacement?.adapter?.address;
       if (verifiedHardenedVault && isAddress(verifiedHardenedVault)) { setHardenedVault(verifiedHardenedVault); localStorage.setItem("duevia-rwa-vault-hardened-v2", verifiedHardenedVault); }
       if (verifiedHardenedAdapter && isAddress(verifiedHardenedAdapter)) { setHardenedAdapter(verifiedHardenedAdapter); localStorage.setItem("duevia-recovery-adapter-v2-hardened", verifiedHardenedAdapter); }
+      setHardenedAdapterAuthorized(Boolean(evidence.hardenedReplacement?.adapterRoleGranted));
       const verifiedMultisig = governance.get("multisig");
       const verifiedQuorum = governance.get("quorum");
       if (verifiedMultisig) { setMultisig(verifiedMultisig); localStorage.setItem("duevia-recovery-multisig-v3", verifiedMultisig); }
@@ -315,6 +317,7 @@ export default function InfrastructureDeployer({ wallet, registryAddress }: { wa
       const current = JSON.parse(localStorage.getItem("duevia-final-testnet-evidence") || "{}") as Record<string, unknown>;
       current.hardenedAdapterRoleGrant = { transactionHash: result.hash, blockNumber: result.blockNumber.toString(), vault: call.address, adapter: hardenedAdapter };
       localStorage.setItem("duevia-final-testnet-evidence", JSON.stringify(current));
+      setHardenedAdapterAuthorized(true);
       setNotice(`Hardened Adapter ADAPTER_ROLE granted · ${result.hash}`);
     } catch (error) { setNotice(`Hardened Adapter role execution failed: ${(error instanceof Error ? error.message : String(error)).slice(0, 240)}`); }
     finally { setRunning(false); }
@@ -532,10 +535,10 @@ export default function InfrastructureDeployer({ wallet, registryAddress }: { wa
       <div className="governance-actions takeover-role-actions">{takeoverRolePlan.map(([label, key, role]) => <div key={`${key}-${role}`}><span>{label} · {role}</span><button type="button" onClick={() => void grantTakeoverRole(key, role, `${label} ${role}`)} disabled={running}>Grant</button></div>)}</div>
     </div>
     <div className="governance-console">
-      <div className="governance-heading"><span>HARDENED VAULT REPLACEMENT · TESTNET</span><strong>{hardenedVault && hardenedAdapter ? "2/2 READY" : hardenedVault ? "1/2 READY" : "0/2 READY"}</strong></div>
+      <div className="governance-heading"><span>HARDENED VAULT REPLACEMENT · TESTNET</span><strong>{hardenedAdapterAuthorized ? "AUTHORIZED" : hardenedVault && hardenedAdapter ? "2/2 READY" : hardenedVault ? "1/2 READY" : "0/2 READY"}</strong></div>
       <p className="proof-note">Deploys the replay-fixed Vault and a new Recovery Adapter V2 bound to it. The verified Recovery Multisig is the constructor admin. The old Vault and Adapter remain unchanged until this replacement is independently verified and migrated.</p>
       <div className="continuity-buttons"><button type="button" className="upload-package" onClick={() => void deployHardened("vault")} disabled={running || Boolean(hardenedVault)}>Deploy hardened Vault</button><button type="button" className="upload-package" onClick={() => void deployHardened("adapter")} disabled={running || !hardenedVault || Boolean(hardenedAdapter)}>Deploy hardened Recovery Adapter V2</button></div>
-      <div className="governance-actions"><div><span>New Vault ADAPTER_ROLE → new Adapter</span><button type="button" onClick={() => void approveHardenedAdapterRole()} disabled={running || !isAddress(multisig) || !hardenedVault || !hardenedAdapter}>Approve</button><button type="button" onClick={() => void executeHardenedAdapterRole()} disabled={running || !isAddress(multisig) || !hardenedVault || !hardenedAdapter}>Execute after 2 approvals</button></div></div>
+      <div className="governance-actions"><div><span>New Vault ADAPTER_ROLE → new Adapter</span><button type="button" onClick={() => void approveHardenedAdapterRole()} disabled={running || hardenedAdapterAuthorized || !isAddress(multisig) || !hardenedVault || !hardenedAdapter}>Approve</button><button type="button" onClick={() => void executeHardenedAdapterRole()} disabled={running || hardenedAdapterAuthorized || !isAddress(multisig) || !hardenedVault || !hardenedAdapter}>Execute after 2 approvals</button></div></div>
       <small className="proof-note">Hardened Vault: {hardenedVault ? short(hardenedVault) : "not deployed"} · Hardened Adapter: {hardenedAdapter ? short(hardenedAdapter) : "not deployed"}</small>
     </div>
     <div className="governance-console">
