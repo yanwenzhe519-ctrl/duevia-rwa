@@ -13,6 +13,8 @@ contract DueviaRwaVault is AccessControl, Pausable, ReentrancyGuard {
     mapping(address => uint256) public accruedYield;
     mapping(address => uint256) public pendingRedemption;
     mapping(bytes32 => bool) public redemptionRequests;
+    mapping(bytes32 => address) public redemptionAccount;
+    mapping(bytes32 => uint256) public redemptionAmount;
     uint256 public totalPrincipal;
     uint256 public totalYield;
 
@@ -25,6 +27,7 @@ contract DueviaRwaVault is AccessControl, Pausable, ReentrancyGuard {
 
     error InvalidAmount();
     error InsufficientBalance();
+    error InvalidRedemptionRequest();
 
     constructor(address admin) {
         _grantRole(DEFAULT_ADMIN_ROLE, admin);
@@ -50,6 +53,8 @@ contract DueviaRwaVault is AccessControl, Pausable, ReentrancyGuard {
     function requestRedemption(bytes32 requestId, uint256 amount) external whenNotPaused {
         if (requestId == bytes32(0) || redemptionRequests[requestId] || amount == 0 || amount > principal[msg.sender] - pendingRedemption[msg.sender]) revert InvalidAmount();
         redemptionRequests[requestId] = true;
+        redemptionAccount[requestId] = msg.sender;
+        redemptionAmount[requestId] = amount;
         pendingRedemption[msg.sender] += amount;
         emit RedemptionRequested(msg.sender, requestId, amount);
     }
@@ -71,7 +76,11 @@ contract DueviaRwaVault is AccessControl, Pausable, ReentrancyGuard {
     }
 
     function _settle(address account, bytes32 requestId, uint256 amount) private {
+        if (!redemptionRequests[requestId] || redemptionAccount[requestId] != account || redemptionAmount[requestId] != amount) revert InvalidRedemptionRequest();
         if (amount == 0 || pendingRedemption[account] < amount || principal[account] < amount) revert InsufficientBalance();
+        redemptionRequests[requestId] = false;
+        delete redemptionAccount[requestId];
+        delete redemptionAmount[requestId];
         pendingRedemption[account] -= amount;
         principal[account] -= amount;
         totalPrincipal -= amount;

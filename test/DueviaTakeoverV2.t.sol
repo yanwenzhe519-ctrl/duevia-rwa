@@ -65,4 +65,19 @@ contract DueviaTakeoverV2Test is TestBase {
         adapter.resume(incidentId);
         assertFalse(vault.paused());
     }
+
+    function testRedemptionSettlementBindsAndConsumesRequest() public {
+        DueviaRwaVault vault = new DueviaRwaVault(address(this));
+        vm.deal(user, 1 ether);
+        vm.prank(user);
+        vault.deposit{value: 1 ether}();
+        bytes32 requestId = keccak256("redemption");
+        vm.prank(user);
+        vault.requestRedemption(requestId, 0.4 ether);
+        vm.expectRevert(DueviaRwaVault.InvalidRedemptionRequest.selector);
+        vault.settleRedemption(address(this), requestId, 0.4 ether);
+        vault.settleRedemption(user, requestId, 0.4 ether);
+        vm.expectRevert(DueviaRwaVault.InvalidRedemptionRequest.selector);
+        vault.settleRedemption(user, requestId, 0.4 ether);
+    }
 }
