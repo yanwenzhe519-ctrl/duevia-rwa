@@ -49,6 +49,19 @@ The following X Layer Testnet records were verified from RPC receipts and CREATE
 
 Transaction `0x7ca1b72c541b4179dae61d793a423d8adc7103c6c99f54b0c900360b7ecebf71` succeeded in block `38705686`. Its account-abstraction inner call targets the RWA Vault and calls `grantRole`. The receipt emits `RoleGranted` for role `0xdbeb657137b1822b3d5418bea6fd641226d964b4c3871ef23546db2622258871` (`keccak256("ADAPTER_ROLE")`) to Recovery Adapter V2.
 
+## Redemption replay-fixed Vault replacement
+
+The replay fix is a new immutable deployment; it cannot be applied to the existing Vault address. Because `DueviaRecoveryAdapterV2` stores its Vault address immutably, deploy both replacement contracts before changing any project or D1 address:
+
+1. Open the DApp deployment console on X Layer Testnet and use `Deploy hardened Vault`. The constructor admin is the RPC-verified Recovery Multisig, and the CREATE2 label is `rwa-vault-hardened-v2`.
+2. Verify the receipt, actual CREATE2 address, deployment block, runtime bytecode, constructor admin, and the redemption settlement replay regression against the generated artifact.
+3. Use `Deploy hardened Recovery Adapter V2`. It is constructed with the same Recovery Multisig and the new Vault address, using the distinct label `recovery-adapter-v2-hardened`.
+4. Verify the Adapter `vault()` call equals the new Vault and verify its runtime bytecode and deployment receipt.
+5. Use the two-step Recovery Multisig controls to grant `ADAPTER_ROLE` on the new Vault to the new Adapter. Verify the `RoleGranted` receipt and an `eth_call` to `hasRole`.
+6. Keep the existing five takeover addresses and historical evidence unchanged. Do not overwrite `rwaVault`, `recoveryAdapterV2`, `DUEVIA-RCV-018`, or D1 until an independent migration approval records the replacement addresses and rollback plan.
+
+The browser stores replacement evidence separately under `hardenedReplacement`; this is intentionally not counted as the verified legacy takeover `5/5` status.
+
 ## Mainnet prohibition
 
 Do not deploy to mainnet or enable automatic broadcasting until an independent contract audit, key-management review, incident-response exercise, real data adapter pilot, gas policy, and rollback plan have been completed.

@@ -129,6 +129,8 @@ export default function InfrastructureDeployer({ wallet, registryAddress }: { wa
   const [incidentMachine, setIncidentMachine] = useState("");
   const [rwaVault, setRwaVault] = useState("");
   const [recoveryAdapter, setRecoveryAdapter] = useState("");
+  const [hardenedVault, setHardenedVault] = useState("");
+  const [hardenedAdapter, setHardenedAdapter] = useState("");
   const [governance, setGovernance] = useState(governanceWallets);
   const [observers, setObservers] = useState(observerWallets);
   const [independenceConfirmed, setIndependenceConfirmed] = useState(false);
@@ -163,6 +165,8 @@ export default function InfrastructureDeployer({ wallet, registryAddress }: { wa
     setIncidentMachine(localStorage.getItem("duevia-incident-machine-v1") || "");
     setRwaVault(localStorage.getItem("duevia-rwa-vault-v1") || "");
     setRecoveryAdapter(localStorage.getItem("duevia-recovery-adapter-v2-v1") || "");
+    setHardenedVault(localStorage.getItem("duevia-rwa-vault-hardened-v2") || "");
+    setHardenedAdapter(localStorage.getItem("duevia-recovery-adapter-v2-hardened") || "");
     const saved = JSON.parse(localStorage.getItem("duevia-governance-addresses") || "null") as unknown;
     if (Array.isArray(saved) && saved.length === 3 && saved.every((value) => typeof value === "string")) setGovernance(saved);
     const savedObservers = JSON.parse(localStorage.getItem("duevia-observer-addresses") || "null") as unknown;
@@ -245,6 +249,70 @@ export default function InfrastructureDeployer({ wallet, registryAddress }: { wa
       localStorage.setItem(keys[kind], result.address);
       setNotice(`${kind} ready at ${result.address}${result.transactionHash ? ` · tx ${result.transactionHash}` : " · existing deployment verified"}`);
     } catch (error) { setNotice(`${kind} failed: ${(error instanceof Error ? error.message : String(error)).slice(0, 240)}`); }
+    finally { setRunning(false); }
+  };
+
+  const deployHardened = async (kind: "vault" | "adapter") => {
+    setRunning(true);
+    try {
+      const account = await activeAccount();
+      if (!isAddress(verifiedTakeoverMultisig)) throw new Error("Verified Recovery Multisig is not configured");
+      let result: DeploymentResult;
+      if (kind === "vault") {
+        result = await create2Deploy(account, dueviaRwaVaultBytecode, dueviaRwaVaultAbi, [verifiedTakeoverMultisig], "rwa-vault-hardened-v2");
+      } else {
+        if (!isAddress(hardenedVault)) throw new Error("Deploy the hardened Vault first");
+        result = await create2Deploy(account, dueviaRecoveryAdapterV2Bytecode, dueviaRecoveryAdapterV2Abi, [verifiedTakeoverMultisig, hardenedVault as Address], "recovery-adapter-v2-hardened");
+      }
+      const current = JSON.parse(localStorage.getItem("duevia-final-testnet-evidence") || "{}") as Record<string, unknown>;
+      const replacement = (current.hardenedReplacement || {}) as Record<string, unknown>;
+      replacement[kind === "vault" ? "vault" : "adapter"] = { address: result.address, transactionHash: result.transactionHash || null, blockNumber: result.blockNumber?.toString() || null, admin: verifiedTakeoverMultisig, replaces: kind === "vault" ? verifiedTakeoverContracts.rwaVault : verifiedTakeoverContracts.recoveryAdapterV2 };
+      current.hardenedReplacement = replacement;
+      localStorage.setItem("duevia-final-testnet-evidence", JSON.stringify(current));
+      if (kind === "vault") {
+        setHardenedVault(result.address);
+        localStorage.setItem("duevia-rwa-vault-hardened-v2", result.address);
+      } else {
+        setHardenedAdapter(result.address);
+        localStorage.setItem("duevia-recovery-adapter-v2-hardened", result.address);
+      }
+      setNotice(`Hardened ${kind} ready at ${result.address}${result.transactionHash ? ` · tx ${result.transactionHash}` : " · existing deployment verified"}. Old deployment remains unchanged.`);
+    } catch (error) { setNotice(`Hardened ${kind} failed: ${(error instanceof Error ? error.message : String(error)).slice(0, 240)}`); }
+    finally { setRunning(false); }
+  };
+
+  const hardenedAdapterRoleCall = () => {
+    if (!isAddress(hardenedVault) || !isAddress(hardenedAdapter)) throw new Error("Deploy both hardened contracts first");
+    const role = keccak256(stringToHex("ADAPTER_ROLE"));
+    return { address: hardenedVault as Address, data: encodeFunctionData({ abi: dueviaRwaVaultAbi, functionName: "grantRole", args: [role, hardenedAdapter as Address] }) };
+  };
+
+  const approveHardenedAdapterRole = async () => {
+    setRunning(true);
+    try {
+      const account = await activeAccount();
+      if (!governance.some((value) => value.toLowerCase() === account.toLowerCase())) throw new Error("Connect one of the configured governance signers");
+      if (!isAddress(multisig)) throw new Error("Verified Recovery Multisig is not loaded");
+      const call = hardenedAdapterRoleCall();
+      const result = await write(account, multisig as Address, dueviaRecoveryMultisigAbi, "approve", [call.address, BigInt(0), call.data]);
+      setNotice(`Hardened Adapter role approval submitted · ${result.hash}. Switch to a second governance signer before execute.`);
+    } catch (error) { setNotice(`Hardened Adapter role approval failed: ${(error instanceof Error ? error.message : String(error)).slice(0, 240)}`); }
+    finally { setRunning(false); }
+  };
+
+  const executeHardenedAdapterRole = async () => {
+    setRunning(true);
+    try {
+      const account = await activeAccount();
+      if (!governance.some((value) => value.toLowerCase() === account.toLowerCase())) throw new Error("Connect one of the configured governance signers");
+      if (!isAddress(multisig)) throw new Error("Verified Recovery Multisig is not loaded");
+      const call = hardenedAdapterRoleCall();
+      const result = await write(account, multisig as Address, dueviaRecoveryMultisigAbi, "execute", [call.address, BigInt(0), call.data]);
+      const current = JSON.parse(localStorage.getItem("duevia-final-testnet-evidence") || "{}") as Record<string, unknown>;
+      current.hardenedAdapterRoleGrant = { transactionHash: result.hash, blockNumber: result.blockNumber.toString(), vault: call.address, adapter: hardenedAdapter };
+      localStorage.setItem("duevia-final-testnet-evidence", JSON.stringify(current));
+      setNotice(`Hardened Adapter ADAPTER_ROLE granted · ${result.hash}`);
+    } catch (error) { setNotice(`Hardened Adapter role execution failed: ${(error instanceof Error ? error.message : String(error)).slice(0, 240)}`); }
     finally { setRunning(false); }
   };
 
@@ -458,6 +526,13 @@ export default function InfrastructureDeployer({ wallet, registryAddress }: { wa
       <div className="governance-heading"><span>TAKEOVER GOVERNANCE HANDOFF · TESTNET</span><strong>GRANT BEFORE REVOKE</strong></div>
       <p className="proof-note">These controls use the RPC-verified takeover addresses and the already deployed Recovery Multisig. Each button sends one role grant; bootstrap permissions are not revoked automatically.</p>
       <div className="governance-actions takeover-role-actions">{takeoverRolePlan.map(([label, key, role]) => <div key={`${key}-${role}`}><span>{label} · {role}</span><button type="button" onClick={() => void grantTakeoverRole(key, role, `${label} ${role}`)} disabled={running}>Grant</button></div>)}</div>
+    </div>
+    <div className="governance-console">
+      <div className="governance-heading"><span>HARDENED VAULT REPLACEMENT · TESTNET</span><strong>{hardenedVault && hardenedAdapter ? "2/2 READY" : hardenedVault ? "1/2 READY" : "0/2 READY"}</strong></div>
+      <p className="proof-note">Deploys the replay-fixed Vault and a new Recovery Adapter V2 bound to it. The verified Recovery Multisig is the constructor admin. The old Vault and Adapter remain unchanged until this replacement is independently verified and migrated.</p>
+      <div className="continuity-buttons"><button type="button" className="upload-package" onClick={() => void deployHardened("vault")} disabled={running || Boolean(hardenedVault)}>Deploy hardened Vault</button><button type="button" className="upload-package" onClick={() => void deployHardened("adapter")} disabled={running || !hardenedVault || Boolean(hardenedAdapter)}>Deploy hardened Recovery Adapter V2</button></div>
+      <div className="governance-actions"><div><span>New Vault ADAPTER_ROLE → new Adapter</span><button type="button" onClick={() => void approveHardenedAdapterRole()} disabled={running || !isAddress(multisig) || !hardenedVault || !hardenedAdapter}>Approve</button><button type="button" onClick={() => void executeHardenedAdapterRole()} disabled={running || !isAddress(multisig) || !hardenedVault || !hardenedAdapter}>Execute after 2 approvals</button></div></div>
+      <small className="proof-note">Hardened Vault: {hardenedVault ? short(hardenedVault) : "not deployed"} · Hardened Adapter: {hardenedAdapter ? short(hardenedAdapter) : "not deployed"}</small>
     </div>
     <div className="governance-console">
       <div className="governance-heading"><span>BOOTSTRAP ROLE REVOCATION · 2-OF-3</span><strong>APPROVE TWICE, THEN EXECUTE</strong></div>
