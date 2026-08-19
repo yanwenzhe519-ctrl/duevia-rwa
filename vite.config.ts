@@ -1,5 +1,6 @@
 import vinext from "vinext";
 import { defineConfig } from "vite";
+import { execFileSync } from "node:child_process";
 import hostingConfig from "./.openai/hosting.json" with { type: "json" };
 import { sites } from "./build/sites-vite-plugin.ts";
 
@@ -7,6 +8,11 @@ const SITE_CREATOR_PLACEHOLDER_DATABASE_ID =
   "00000000-0000-4000-8000-000000000000";
 
 const { d1, r2 } = hostingConfig;
+
+const buildGitCommit = process.env.DUEVIA_GIT_COMMIT || (() => {
+  try { return execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim(); } catch { return "unknown"; }
+})();
+const buildFrontendVersion = process.env.DUEVIA_FRONTEND_VERSION || `duevia-ui/${buildGitCommit.slice(0, 12)}`;
 
 // macOS Seatbelt blocks FSEvents, so Codex previews need polling for HMR.
 const isCodexSeatbeltSandbox = process.env.CODEX_SANDBOX === "seatbelt";
@@ -41,6 +47,10 @@ const localBindingConfig = {
     : [],
   triggers: { crons: ["*/5 * * * *"] },
   ai: { binding: "AI" },
+  vars: {
+    DUEVIA_GIT_COMMIT: buildGitCommit,
+    DUEVIA_FRONTEND_VERSION: buildFrontendVersion,
+  },
   version_metadata: { binding: "CF_VERSION_METADATA" },
 };
 

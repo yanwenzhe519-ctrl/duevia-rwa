@@ -27,6 +27,7 @@ interface Env {
   WATCHDOG_OBSERVER_ADDRESSES?: string;
   DUEVIA_OBSERVER_PRIVATE_KEY?: `0x${string}`;
   DUEVIA_GIT_COMMIT?: string;
+  DUEVIA_FRONTEND_VERSION?: string;
   DUEVIA_DEPLOYED_AT?: string;
   DUEVIA_RELEASE?: string;
   CF_VERSION_METADATA?: { id?: string; tag?: string; timestamp?: string };
@@ -495,7 +496,7 @@ async function evidenceApi(env: Env) {
     release: {
       name: env.DUEVIA_RELEASE || dueviaRelease,
       gitCommit: env.DUEVIA_GIT_COMMIT || "unknown",
-      frontendVersion: env.DUEVIA_GIT_COMMIT || "unknown",
+      frontendVersion: env.DUEVIA_FRONTEND_VERSION || "unknown",
       deployedAt: env.DUEVIA_DEPLOYED_AT || env.CF_VERSION_METADATA?.timestamp || null,
       workerVersion: env.CF_VERSION_METADATA?.id || null,
       workerTag: env.CF_VERSION_METADATA?.tag || null,
@@ -752,7 +753,10 @@ const worker = {
           lastCheckedAt = latest.created_at;
           readiness = Number(latest.valid) === 1 ? "READY" : "DEGRADED";
           if (readiness === "DEGRADED") {
-            try { const validation = JSON.parse(String(latest.validation_json || "{}")) as { verifier?: { reason?: string }; deterministic?: { errors?: string[] } }; lastError = String(validation.verifier?.reason || validation.deterministic?.errors?.[0] || "Latest AI investigation did not pass validation.").slice(0, 240); } catch { lastError = "Latest AI investigation did not pass validation."; }
+            try {
+              const validation = JSON.parse(String(latest.validation_json || "{}")) as { verifier?: { reason?: string; violations?: string[] }; deterministic?: { errors?: string[]; violations?: string[] } };
+              lastError = String(validation.verifier?.reason || validation.deterministic?.violations?.[0] || validation.deterministic?.errors?.[0] || validation.verifier?.violations?.[0] || "Latest AI investigation did not pass validation.").slice(0, 240);
+            } catch { lastError = "Latest AI investigation did not pass validation."; }
           }
         }
       }

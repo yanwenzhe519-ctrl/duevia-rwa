@@ -62,6 +62,10 @@ The replay fix is a new immutable deployment; it cannot be applied to the existi
 
 The browser stores replacement evidence separately under `hardenedReplacement`; this is intentionally not counted as the verified legacy takeover `5/5` status.
 
+The hardened replacement cutover is recorded in D1 migration `0012_hardened_vault_cutover.sql`. It changes only the active `DUEVIA-RCV-018` Vault/Adapter pointers; the legacy deployment evidence and historical checkpoint finality metadata remain unchanged. Rollback is the inverse pointer update to the verified legacy addresses, subject to governance approval.
+
+The public AI health endpoint must continue to report `DEGRADED` / `review-required` when validation fails. In the current testnet record, the latest investigation failed because `facts must contain at least one cited claim`; this is an evidence-quality failure, not a wallet failure and not a validated candidate.
+
 ## Mainnet prohibition
 
 Do not deploy to mainnet or enable automatic broadcasting until an independent contract audit, key-management review, incident-response exercise, real data adapter pilot, gas policy, and rollback plan have been completed.
