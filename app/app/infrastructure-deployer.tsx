@@ -8,6 +8,11 @@ import { dueviaContinuityGuardAbi, dueviaContinuityGuardBytecode } from "@/lib/d
 import { dueviaContinuityPoolAbi, dueviaContinuityPoolBytecode } from "@/lib/duevia-continuity-pool-artifact";
 import { dueviaObserverQuorumAbi, dueviaObserverQuorumBytecode } from "@/lib/duevia-observer-quorum-artifact";
 import { dueviaRecoveryMultisigAbi, dueviaRecoveryMultisigBytecode } from "@/lib/duevia-recovery-multisig-artifact";
+import { dueviaRwaRegistryAbi, dueviaRwaRegistryBytecode } from "@/lib/duevia-rwa-registry-artifact";
+import { dueviaCheckpointRegistryAbi, dueviaCheckpointRegistryBytecode } from "@/lib/duevia-checkpoint-registry-artifact";
+import { dueviaIncidentStateMachineAbi, dueviaIncidentStateMachineBytecode } from "@/lib/duevia-incident-state-machine-artifact";
+import { dueviaRwaVaultAbi, dueviaRwaVaultBytecode } from "@/lib/duevia-rwa-vault-artifact";
+import { dueviaRecoveryAdapterV2Abi, dueviaRecoveryAdapterV2Bytecode } from "@/lib/duevia-recovery-adapter-v2-artifact";
 
 type EthereumProvider = { request(args: { method: string; params?: unknown[] | Record<string, unknown> }): Promise<unknown> };
 declare global { interface Window { ethereum?: EthereumProvider } }
@@ -104,6 +109,11 @@ export default function InfrastructureDeployer({ wallet, registryAddress }: { wa
   const [continuityPool, setContinuityPool] = useState("");
   const [multisig, setMultisig] = useState("");
   const [quorum, setQuorum] = useState("");
+  const [rwaRegistry, setRwaRegistry] = useState("");
+  const [checkpointRegistry, setCheckpointRegistry] = useState("");
+  const [incidentMachine, setIncidentMachine] = useState("");
+  const [rwaVault, setRwaVault] = useState("");
+  const [recoveryAdapter, setRecoveryAdapter] = useState("");
   const [governance, setGovernance] = useState(governanceWallets);
   const [observers, setObservers] = useState(observerWallets);
   const [independenceConfirmed, setIndependenceConfirmed] = useState(false);
@@ -133,6 +143,11 @@ export default function InfrastructureDeployer({ wallet, registryAddress }: { wa
     setContinuityPool(localStorage.getItem("duevia-continuity-pool-v3") || "");
     setMultisig(localStorage.getItem("duevia-recovery-multisig-v3") || "");
     setQuorum(localStorage.getItem("duevia-observer-quorum-v3") || "");
+    setRwaRegistry(localStorage.getItem("duevia-rwa-registry-v1") || "");
+    setCheckpointRegistry(localStorage.getItem("duevia-checkpoint-registry-v1") || "");
+    setIncidentMachine(localStorage.getItem("duevia-incident-machine-v1") || "");
+    setRwaVault(localStorage.getItem("duevia-rwa-vault-v1") || "");
+    setRecoveryAdapter(localStorage.getItem("duevia-recovery-adapter-v2-v1") || "");
     const saved = JSON.parse(localStorage.getItem("duevia-governance-addresses") || "null") as unknown;
     if (Array.isArray(saved) && saved.length === 3 && saved.every((value) => typeof value === "string")) setGovernance(saved);
     const savedObservers = JSON.parse(localStorage.getItem("duevia-observer-addresses") || "null") as unknown;
@@ -176,6 +191,41 @@ export default function InfrastructureDeployer({ wallet, registryAddress }: { wa
       if (kind === "quorum") { setQuorum(result.address); localStorage.setItem("duevia-observer-quorum-v3", result.address); }
       setNotice(`${kind} ready at ${result.address}${result.transactionHash ? ` · tx ${result.transactionHash}` : " · existing deployment verified"}${kind === "guard" ? ` · project ${demoProjectId}` : ""}`);
     } catch (error) { setNotice(`${kind} failed: ${(error instanceof Error ? error.message : String(error)).slice(0, 240)}`); }
+    finally { setRunning(false); }
+  };
+
+  const deployTakeover = async (kind: "rwaRegistry" | "checkpointRegistry" | "incidentMachine" | "rwaVault" | "recoveryAdapter") => {
+    setRunning(true);
+    try {
+      const account = await activeAccount();
+      let result: DeploymentResult;
+      if (kind === "rwaRegistry") result = await create2Deploy(account, dueviaRwaRegistryBytecode, dueviaRwaRegistryAbi, [account], "rwa-registry-v1");
+      else if (kind === "checkpointRegistry") result = await create2Deploy(account, dueviaCheckpointRegistryBytecode, dueviaCheckpointRegistryAbi, [account], "checkpoint-registry-v1");
+      else if (kind === "incidentMachine") result = await create2Deploy(account, dueviaIncidentStateMachineBytecode, dueviaIncidentStateMachineAbi, [account], "incident-machine-v1");
+      else if (kind === "rwaVault") result = await create2Deploy(account, dueviaRwaVaultBytecode, dueviaRwaVaultAbi, [account], "rwa-vault-v1");
+      else {
+        if (!isAddress(rwaVault)) throw new Error("Deploy the RWA Vault first");
+        result = await create2Deploy(account, dueviaRecoveryAdapterV2Bytecode, dueviaRecoveryAdapterV2Abi, [account, rwaVault as Address], "recovery-adapter-v2-v1");
+      }
+      saveResult(kind, result);
+      const setters: Record<string, (value: string) => void> = { rwaRegistry: setRwaRegistry, checkpointRegistry: setCheckpointRegistry, incidentMachine: setIncidentMachine, rwaVault: setRwaVault, recoveryAdapter: setRecoveryAdapter };
+      const keys: Record<string, string> = { rwaRegistry: "duevia-rwa-registry-v1", checkpointRegistry: "duevia-checkpoint-registry-v1", incidentMachine: "duevia-incident-machine-v1", rwaVault: "duevia-rwa-vault-v1", recoveryAdapter: "duevia-recovery-adapter-v2-v1" };
+      setters[kind](result.address);
+      localStorage.setItem(keys[kind], result.address);
+      setNotice(`${kind} ready at ${result.address}${result.transactionHash ? ` · tx ${result.transactionHash}` : " · existing deployment verified"}`);
+    } catch (error) { setNotice(`${kind} failed: ${(error instanceof Error ? error.message : String(error)).slice(0, 240)}`); }
+    finally { setRunning(false); }
+  };
+
+  const authorizeRecoveryAdapter = async () => {
+    setRunning(true);
+    try {
+      const account = await activeAccount();
+      if (!isAddress(rwaVault) || !isAddress(recoveryAdapter)) throw new Error("Deploy the RWA Vault and Recovery Adapter first");
+      const adapterRole = keccak256(stringToHex("ADAPTER_ROLE"));
+      const result = await write(account, rwaVault as Address, dueviaRwaVaultAbi, "grantRole", [adapterRole, recoveryAdapter as Address]);
+      setNotice(`Recovery Adapter authorized on RWA Vault · ${result.hash}`);
+    } catch (error) { setNotice(`Adapter authorization failed: ${(error instanceof Error ? error.message : String(error)).slice(0, 240)}`); }
     finally { setRunning(false); }
   };
 
@@ -319,6 +369,12 @@ export default function InfrastructureDeployer({ wallet, registryAddress }: { wa
   return <div className="infrastructure-panel">
     <div className="panel-title"><div><span>X LAYER INFRASTRUCTURE</span><h3>Autonomous continuity runtime</h3></div><b>{runtime.operationsStatus === "HEALTHY" && runtime.model === "model-grounded" ? "LIVE" : "PARTIAL"}</b></div>
     <div className="monitor-grid"><div className="monitor-card"><span>Keeper operations</span><strong>{runtime.operationsStatus}</strong><small>{runtime.keeperRuns} runs · failover {runtime.failoverStatus}</small></div><div className="monitor-card"><span>AI investigator</span><strong>{runtime.model === "model-grounded" ? "MODEL LIVE" : "FALLBACK"}</strong><small>Structured output + verifier</small></div><div className="monitor-card"><span>Recovery state</span><strong>{runtime.incidents} incidents</strong><small>{runtime.capsules} capsules · {runtime.queuedActions} approval queue</small></div><div className="monitor-card"><span>Coordinator</span><strong>{coordinator ? short(coordinator) : "NOT DEPLOYED"}</strong><small>X Layer Testnet</small></div></div>
+    <div className="governance-console">
+      <div className="governance-heading"><span>RWA TAKEOVER CONTRACTS · TESTNET</span><strong>{[rwaRegistry, checkpointRegistry, incidentMachine, rwaVault, recoveryAdapter].filter(Boolean).length}/5 DEPLOYED</strong></div>
+      <div className="continuity-buttons"><button type="button" className="upload-package" onClick={() => deployTakeover("rwaRegistry")} disabled={running || Boolean(rwaRegistry)}>Deploy RWA Registry</button><button type="button" className="upload-package" onClick={() => deployTakeover("checkpointRegistry")} disabled={running || Boolean(checkpointRegistry)}>Deploy Checkpoint Registry</button><button type="button" className="upload-package" onClick={() => deployTakeover("incidentMachine")} disabled={running || Boolean(incidentMachine)}>Deploy Incident State Machine</button></div>
+      <div className="continuity-buttons"><button type="button" className="upload-package" onClick={() => deployTakeover("rwaVault")} disabled={running || Boolean(rwaVault)}>Deploy RWA Vault</button><button type="button" className="upload-package" onClick={() => deployTakeover("recoveryAdapter")} disabled={running || !rwaVault || Boolean(recoveryAdapter)}>Deploy Recovery Adapter V2</button><button type="button" className="anchor-button" onClick={authorizeRecoveryAdapter} disabled={running || !rwaVault || !recoveryAdapter}>Authorize Adapter on Vault</button></div>
+      <small className="proof-note">New takeover contracts are immutable X Layer Testnet deployments. Addresses and transaction hashes are stored in this browser session until they are copied into the project registry.</small>
+    </div>
     <div className="continuity-buttons"><button className="upload-package" type="button" onClick={() => deploy("coordinator")} disabled={running || Boolean(coordinator)}>Deploy Coordinator</button><button className="upload-package" type="button" onClick={() => deploy("guard")} disabled={running || !coordinator || !registryAddress || Boolean(continuityGuard)}>Deploy Dual Guard</button><button className="anchor-button" type="button" onClick={() => deploy("pool")} disabled={running || !continuityGuard || Boolean(continuityPool)}>Deploy Continuity Pool</button></div>
     <div className="governance-console">
       <div className="governance-heading"><span>2-OF-3 GOVERNANCE + OBSERVER QUORUM</span><strong>{validConfiguration ? "TESTNET CONFIGURATION VALID" : "SEPARATE THE TEST IDENTITIES"}</strong></div>

@@ -653,6 +653,10 @@ async function takeoverApi(request: Request, env: Env, projectId: string, tail: 
     const rows = await env.WATCHDOG_DB.prepare("SELECT checkpoint_id, chain_id, contract_address, from_block, to_block, confirmation_block, checkpoint_hash, created_at FROM rwa_checkpoints WHERE project_id = ? ORDER BY created_at DESC LIMIT 100").bind(projectId).all();
     return Response.json({ ok: true, projectId, checkpoints: rows.results }, { headers: { "Cache-Control": "no-store" } });
   }
+  if (request.method === "GET" && segments[0] === "accounts" && !segments[1]) {
+    const rows = await env.WATCHDOG_DB.prepare("SELECT project_id, account, checkpoint_id, principal, yield_amount, pending_redemption, evidence_json, updated_at FROM rwa_account_states WHERE project_id = ? ORDER BY account ASC LIMIT 200").bind(projectId).all<Record<string, unknown>>();
+    return Response.json({ ok: true, projectId, accounts: rows.results.map((row) => ({ ...row, evidence: parseJsonRecord(row.evidence_json) })) }, { headers: { "Cache-Control": "no-store" } });
+  }
   if (request.method === "GET" && segments[0] === "accounts" && segments[1]) {
     const account = decodeURIComponent(segments[1]).toLowerCase();
     if (!/^0x[0-9a-f]{40}$/.test(account)) return Response.json({ ok: false, error: "Invalid account." }, { status: 400 });
@@ -718,7 +722,20 @@ const worker = {
     if (url.pathname === "/api/agent" && request.method === "POST") return aiApi(request, env);
     if (url.pathname === "/api/agent/health" && request.method === "GET") {
       const configured = Boolean(env.AI && typeof env.AI.run === "function");
-      return Response.json({ ok: configured, configured, readiness: configured ? "CONFIGURED_UNVERIFIED" : "UNAVAILABLE", provider: configured ? "cloudflare-workers-ai" : null, model: configured ? "@cf/meta/llama-3.3-70b-instruct-fp8-fast" : null, mode: configured ? "configured-unverified" : "grounded-fallback", message: configured ? "Workers AI binding is configured; model quota and inference are not probed by this health endpoint." : "Workers AI binding is not configured." }, { status: configured ? 200 : 503, headers: { "Cache-Control": "no-store" } });
+      let readiness: "READY" | "DEGRADED" | "CONFIGURED_UNVERIFIED" | "UNAVAILABLE" = configured ? "CONFIGURED_UNVERIFIED" : "UNAVAILABLE";
+      let lastCheckedAt: string | null = null;
+      let lastError: string | null = null;
+      if (configured) {
+        const latest = await env.WATCHDOG_DB.prepare("SELECT valid, created_at, validation_json FROM ai_investigations ORDER BY created_at DESC LIMIT 1").first<{ valid?: number; created_at?: string; validation_json?: string }>();
+        if (latest?.created_at) {
+          lastCheckedAt = latest.created_at;
+          readiness = Number(latest.valid) === 1 ? "READY" : "DEGRADED";
+          if (readiness === "DEGRADED") {
+            try { const validation = JSON.parse(String(latest.validation_json || "{}")) as { verifier?: { reason?: string }; deterministic?: { errors?: string[] } }; lastError = String(validation.verifier?.reason || validation.deterministic?.errors?.[0] || "Latest AI investigation did not pass validation.").slice(0, 240); } catch { lastError = "Latest AI investigation did not pass validation."; }
+          }
+        }
+      }
+      return Response.json({ ok: configured, configured, ready: readiness === "READY", readiness, lastCheckedAt, lastError, provider: configured ? "cloudflare-workers-ai" : null, model: configured ? "@cf/meta/llama-3.3-70b-instruct-fp8-fast" : null, mode: readiness === "READY" ? "model-grounded" : readiness === "DEGRADED" ? "review-required" : configured ? "configured-unverified" : "grounded-fallback", message: !configured ? "Workers AI binding is not configured." : readiness === "READY" ? "A recent investigation passed deterministic and independent verification." : readiness === "DEGRADED" ? "The latest investigation requires review; model availability or validation is not currently healthy." : "Workers AI binding is configured but no model result has been recorded yet." }, { status: configured ? 200 : 503, headers: { "Cache-Control": "no-store" } });
     }
     const takeoverMatch = url.pathname.match(/^\/api\/rwa\/([^/]+)(?:\/(.*))?$/);
     if (takeoverMatch) return takeoverApi(request, env, decodeURIComponent(takeoverMatch[1]), takeoverMatch[2] || "status");
