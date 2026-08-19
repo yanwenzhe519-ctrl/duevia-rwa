@@ -228,13 +228,15 @@ async function runKeeperOnce(env: Env, startedAt: string, triggerSource: string,
           ]);
           let aiValidated = false;
           try {
-            const existingInvestigation = await env.WATCHDOG_DB.prepare("SELECT investigation_id, valid FROM ai_investigations WHERE incident_id = ? AND recovery_root = ? LIMIT 1").bind(capsule.incidentId, capsule.recoveryRoot).first<{ investigation_id: string; valid: number }>();
+            const existingInvestigation = await env.WATCHDOG_DB.prepare("SELECT investigation_id, created_at, valid FROM ai_investigations WHERE incident_id = ? AND recovery_root = ? ORDER BY created_at DESC LIMIT 1").bind(capsule.incidentId, capsule.recoveryRoot).first<{ investigation_id: string; created_at: string; valid: number }>();
             aiValidated = Boolean(existingInvestigation?.valid);
-            if (!existingInvestigation) {
+            const existingAge = existingInvestigation?.created_at ? Date.parse(existingInvestigation.created_at) : Number.NaN;
+            const retryFailedInvestigation = Boolean(existingInvestigation && !aiValidated && (!Number.isFinite(existingAge) || Date.parse(startedAt) - existingAge >= AI_RETRY_COOLDOWN_MS));
+            if (!existingInvestigation || retryFailedInvestigation) {
               const aiResult = await performInvestigation("Investigate this RWA servicing outage and the deterministic recovery capsule. Separate supported facts, inferences, missing evidence, and approval-gated actions.", { incident: evaluation, capsule }, env);
               aiValidated = aiResult.validation.valid;
               await env.WATCHDOG_DB.prepare("INSERT INTO ai_investigations (investigation_id, incident_id, created_at, model, valid, result_json, validation_json, recovery_root) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
-                .bind(`ai:${capsule.incidentId}:${capsule.recoveryRoot.slice(2, 18)}`, capsule.incidentId, startedAt, aiResult.model, aiResult.validation.valid ? 1 : 0, JSON.stringify(aiResult.investigation), JSON.stringify(aiResult.validation), capsule.recoveryRoot).run();
+                .bind(`ai:${capsule.incidentId}:${capsule.recoveryRoot.slice(2, 18)}:${Date.now()}`, capsule.incidentId, startedAt, aiResult.model, aiResult.validation.valid ? 1 : 0, JSON.stringify(aiResult.investigation), JSON.stringify(aiResult.validation), capsule.recoveryRoot).run();
             }
           } catch (error) {
             await persistObservation(env.WATCHDOG_DB, { observationId: `ai-error:${project.pool_id}:${Date.now()}`, poolId: project.pool_id, source: "ai-investigator", event: "AIInvestigationError", error: error instanceof Error ? error.message : String(error) });
@@ -347,6 +349,7 @@ async function recoveryApi(request: Request, env: Env) {
 
 const AI_RATE_LIMIT = 10;
 const AI_RATE_WINDOW_MS = 60_000;
+const AI_RETRY_COOLDOWN_MS = 15 * 60_000;
 
 function adminAuthorized(request: Request, env: Env) {
   return Boolean(env.WATCHDOG_ADMIN_TOKEN) && request.headers.get("Authorization") === `Bearer ${env.WATCHDOG_ADMIN_TOKEN}`;
