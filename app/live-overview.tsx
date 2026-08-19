@@ -13,7 +13,7 @@ type Operations = {
   failover?: { status?: string };
 };
 
-type Agent = { mode?: string; model?: string };
+type Agent = { mode?: string; model?: string; readiness?: string };
 
 function readModel(value?: string) {
   if (!value) return "Workers AI";
@@ -66,7 +66,7 @@ export function LiveOverview() {
     <div className="live-overview-metrics">
       <div><span>Runtime persistence</span><strong>{operations?.persistent ? "D1" : "--"}</strong><small>{operations?.persistent ? "persistent evidence" : "awaiting health"}</small></div>
       <div><span>Keeper cadence</span><strong>{operations?.cadenceMinutes ? `${operations.cadenceMinutes}m` : "--"}</strong><small>scheduled scan</small></div>
-      <div><span>AI runtime</span><strong>{agent ? "READY" : "--"}</strong><small>{readModel(agent?.model)}</small></div>
+      <div><span>AI runtime</span><strong>{agent?.readiness === "CONFIGURED_UNVERIFIED" ? "CONFIGURED" : agent ? "UNAVAILABLE" : "--"}</strong><small>{readModel(agent?.model)} · quota unprobed</small></div>
     </div>
     <div className="live-overview-rows"><div><span>Failover policy</span><b>{operations?.failover?.status || "CHECKING"}</b></div><div><span>Execution boundary</span><b>{operations?.automaticBroadcastEnabled ? "AUTHORIZED" : "HUMAN APPROVAL"}</b></div><div><span>Latest sync</span><b>{formatSync(operations?.latestRunAt)}</b></div></div>
     <div className="live-overview-foot"><span>{updatedAt ? `Auto-refresh · ${formatSync(updatedAt)}` : "Connecting to public runtime"}</span><a href="/proof">View evidence <span>↗</span></a></div>

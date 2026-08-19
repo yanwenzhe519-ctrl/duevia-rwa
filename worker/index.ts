@@ -128,9 +128,13 @@ async function runKeeperOnce(env: Env, startedAt: string, triggerSource: string,
     let lastHeartbeatAt = contractActivity ? startedAt : String(project.last_heartbeat_at);
     if (/^0x[0-9a-fA-F]{40}$/.test(String(project.contract_address || ""))) {
       try {
-        const previous = await env.WATCHDOG_DB.prepare("SELECT account, principal, yield_amount, pending_redemption FROM rwa_account_states WHERE project_id = ?").bind(String(project.pool_id)).all<Record<string, unknown>>();
+        const [previous, previousQueue] = await Promise.all([
+          env.WATCHDOG_DB.prepare("SELECT account, principal, yield_amount, pending_redemption FROM rwa_account_states WHERE project_id = ?").bind(String(project.pool_id)).all<Record<string, unknown>>(),
+          env.WATCHDOG_DB.prepare("SELECT request_id, account, amount, execution_status FROM rwa_redemptions WHERE project_id = ?").bind(String(project.pool_id)).all<Record<string, unknown>>(),
+        ]);
         const previousAccounts = Object.fromEntries(previous.results.map((row) => [String(row.account), { principal: String(row.principal), yield: String(row.yield_amount), pendingRedemption: String(row.pending_redemption) }]));
-        const checkpoint = buildRwaCheckpoint({ projectId: String(project.pool_id), chainId: scan.chainId, contractAddress: String(project.contract_address), fromBlock: scan.fromBlock, toBlock: scan.toBlock, confirmationBlock: scan.toBlock, events: scan.observations.filter((observation) => String(observation.address).toLowerCase() === String(project.contract_address).toLowerCase()), previousAccounts });
+        const previousRedemptions = previousQueue.results.map((row) => ({ requestId: String(row.request_id), account: String(row.account), amount: String(row.amount), status: String(row.execution_status || "QUEUED").toUpperCase() === "SETTLED" ? "SETTLED" : "QUEUED" }));
+        const checkpoint = buildRwaCheckpoint({ projectId: String(project.pool_id), chainId: scan.chainId, contractAddress: String(project.contract_address), fromBlock: scan.fromBlock, toBlock: scan.toBlock, confirmationBlock: scan.toBlock, events: scan.observations.filter((observation) => String(observation.address).toLowerCase() === String(project.contract_address).toLowerCase()), previousAccounts, previousRedemptions });
         const checkpointId = `${project.pool_id}:${checkpoint.toBlock}`;
         const statements = [env.WATCHDOG_DB.prepare("INSERT OR IGNORE INTO rwa_checkpoints (checkpoint_id, project_id, chain_id, contract_address, from_block, to_block, confirmation_block, checkpoint_hash, checkpoint_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").bind(checkpointId, project.pool_id, checkpoint.chainId, checkpoint.contractAddress, checkpoint.fromBlock, checkpoint.toBlock, checkpoint.confirmationBlock, checkpoint.checkpointHash, JSON.stringify(checkpoint), startedAt)];
         for (const account of checkpoint.accounts) statements.push(env.WATCHDOG_DB.prepare("INSERT INTO rwa_account_states (project_id, account, checkpoint_id, principal, yield_amount, pending_redemption, evidence_json, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(project_id, account) DO UPDATE SET checkpoint_id=excluded.checkpoint_id, principal=excluded.principal, yield_amount=excluded.yield_amount, pending_redemption=excluded.pending_redemption, evidence_json=excluded.evidence_json, updated_at=excluded.updated_at").bind(project.pool_id, account.account, checkpointId, account.principal, account.yield, account.pendingRedemption, JSON.stringify({ checkpointHash: checkpoint.checkpointHash, evidenceRoot: checkpoint.evidenceRoot }), startedAt));
@@ -332,6 +336,26 @@ async function recoveryApi(request: Request, env: Env) {
   const query = incidentId ? env.WATCHDOG_DB.prepare("SELECT * FROM recovery_capsules WHERE incident_id = ? ORDER BY created_at DESC LIMIT 20").bind(incidentId) : env.WATCHDOG_DB.prepare("SELECT * FROM recovery_capsules ORDER BY created_at DESC LIMIT 50");
   const rows = await query.all<Record<string, unknown>>();
   return Response.json({ ok: true, capsules: rows.results.map((row) => ({ recoveryRoot: row.recovery_root, incidentId: row.incident_id, poolId: row.pool_id, state: row.state, createdAt: row.created_at, ...(admin ? { capsule: JSON.parse(String(row.capsule_json || "{}")) } : {}) })) }, { headers: { "Cache-Control": "no-store" } });
+}
+
+const AI_RATE_LIMIT = 10;
+const AI_RATE_WINDOW_MS = 60_000;
+
+function adminAuthorized(request: Request, env: Env) {
+  return Boolean(env.WATCHDOG_ADMIN_TOKEN) && request.headers.get("Authorization") === `Bearer ${env.WATCHDOG_ADMIN_TOKEN}`;
+}
+
+function unauthorized() {
+  return Response.json({ ok: false, error: "Administrator authorization is required." }, { status: 401, headers: { "Cache-Control": "no-store" } });
+}
+
+async function consumeAiRateLimit(db: D1Database, key: string, nowMs = Date.now()) {
+  const windowStart = nowMs - AI_RATE_WINDOW_MS;
+  const now = new Date(nowMs).toISOString();
+  await db.prepare("INSERT INTO api_rate_limits (rate_key, window_started_at, request_count, updated_at) VALUES (?, ?, 1, ?) ON CONFLICT(rate_key) DO UPDATE SET request_count = CASE WHEN window_started_at < ? THEN 1 ELSE request_count + 1 END, window_started_at = CASE WHEN window_started_at < ? THEN ? ELSE window_started_at END, updated_at = excluded.updated_at")
+    .bind(key, nowMs, now, windowStart, windowStart, nowMs).run();
+  const row = await db.prepare("SELECT request_count, window_started_at FROM api_rate_limits WHERE rate_key = ?").bind(key).first<{ request_count: number; window_started_at: number }>();
+  return Boolean(row && Number(row.request_count) <= AI_RATE_LIMIT && Number(row.window_started_at) >= windowStart);
 }
 
 function parseJsonRecord(value: unknown): Record<string, unknown> {
@@ -555,6 +579,8 @@ async function performInvestigation(question: string, contextObject: unknown, en
 async function aiApi(request: Request, env: Env) {
   if (request.method !== "POST") return new Response("Method Not Allowed", { status: 405 });
   try {
+    const rateKey = request.headers.get("CF-Connecting-IP") || request.headers.get("X-Forwarded-For")?.split(",")[0].trim() || "anonymous";
+    if (!(await consumeAiRateLimit(env.WATCHDOG_DB, `ai:${rateKey}`))) return Response.json({ error: "AI investigation rate limit exceeded. Try again later.", mode: "review-required" }, { status: 429, headers: { "Cache-Control": "no-store", "Retry-After": "60" } });
     const body = await request.json() as { question?: unknown; context?: unknown };
     const question = typeof body.question === "string" ? body.question.trim().slice(0, 2_000) : "";
     if (!question) return Response.json({ error: "A non-empty investigation question is required.", mode: "cloudflare-workers-ai" }, { status: 400 });
@@ -598,6 +624,7 @@ async function takeoverApi(request: Request, env: Env, projectId: string, tail: 
   const segments = tail.split("/").filter(Boolean);
   const now = new Date().toISOString();
   if (request.method === "POST" && segments[0] === "reconstruct") {
+    if (!adminAuthorized(request, env)) return unauthorized();
     try {
       const body = await request.json() as Record<string, unknown>;
       const result = await performAccountReconstruction(projectId, body, env);
@@ -633,6 +660,7 @@ async function takeoverApi(request: Request, env: Env, projectId: string, tail: 
     return Response.json({ ok: true, projectId, redemptions: rows.results }, { headers: { "Cache-Control": "no-store" } });
   }
   if (segments[0] === "redemptions" && request.method === "POST") {
+    if (!adminAuthorized(request, env)) return unauthorized();
     const body = await request.json() as Record<string, unknown>;
     const requestId = String(body.requestId || "").slice(0, 160);
     const account = String(body.account || "").toLowerCase();
@@ -651,6 +679,7 @@ async function takeoverApi(request: Request, env: Env, projectId: string, tail: 
     return Response.json({ ok: true, projectId, traces: rows.results.map((row) => ({ ...row, trace: JSON.parse(String(row.trace_json || "{}")) })) }, { headers: { "Cache-Control": "no-store" } });
   }
   if (request.method === "POST" && segments[0] === "disputes") {
+    if (!adminAuthorized(request, env)) return unauthorized();
     const body = await request.json() as Record<string, unknown>;
     const evidenceHash = String(body.evidenceHash || "");
     const reason = String(body.reason || "").trim().slice(0, 2_000);
@@ -681,7 +710,10 @@ const worker = {
     if (url.pathname === "/api/evidence" && request.method === "GET") return evidenceApi(env);
     if (url.pathname === "/api/execution") return executionApi(request, env);
     if (url.pathname === "/api/agent" && request.method === "POST") return aiApi(request, env);
-    if (url.pathname === "/api/agent/health" && request.method === "GET") return Response.json({ ok: true, provider: "cloudflare-workers-ai", model: "@cf/meta/llama-3.3-70b-instruct-fp8-fast", mode: "model-grounded" }, { headers: { "Cache-Control": "no-store" } });
+    if (url.pathname === "/api/agent/health" && request.method === "GET") {
+      const configured = Boolean(env.AI && typeof env.AI.run === "function");
+      return Response.json({ ok: configured, configured, readiness: configured ? "CONFIGURED_UNVERIFIED" : "UNAVAILABLE", provider: configured ? "cloudflare-workers-ai" : null, model: configured ? "@cf/meta/llama-3.3-70b-instruct-fp8-fast" : null, mode: configured ? "configured-unverified" : "grounded-fallback", message: configured ? "Workers AI binding is configured; model quota and inference are not probed by this health endpoint." : "Workers AI binding is not configured." }, { status: configured ? 200 : 503, headers: { "Cache-Control": "no-store" } });
+    }
     const takeoverMatch = url.pathname.match(/^\/api\/rwa\/([^/]+)(?:\/(.*))?$/);
     if (takeoverMatch) return takeoverApi(request, env, decodeURIComponent(takeoverMatch[1]), takeoverMatch[2] || "status");
     if (url.pathname === "/api/keeper/run" && request.method === "POST") {

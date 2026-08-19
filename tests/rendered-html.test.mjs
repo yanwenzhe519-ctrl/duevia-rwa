@@ -197,3 +197,17 @@ test("the deployed worker includes durable operations hardening", async () => {
   assert.match(failoverWorkflow, /github-actions-failover/);
   assert.match(failoverWorkflow, /DUEVIA_KEEPER_TOKEN/);
 });
+
+test("takeover writes require authorization and AI health is explicit about readiness", async () => {
+  const [worker, health, migration] = await Promise.all([
+    readFile(new URL("../worker/index.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/agent/health/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../drizzle/0010_api_rate_limits.sql", import.meta.url), "utf8"),
+  ]);
+  assert.match(worker, /function adminAuthorized/);
+  assert.match(worker, /consumeAiRateLimit/);
+  assert.match(worker, /Administrator authorization is required/);
+  assert.match(worker, /CONFIGURED_UNVERIFIED/);
+  assert.match(health, /CONFIGURED_UNVERIFIED/);
+  assert.match(migration, /CREATE TABLE IF NOT EXISTS api_rate_limits/);
+});

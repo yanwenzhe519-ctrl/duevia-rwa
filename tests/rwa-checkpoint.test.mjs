@@ -18,3 +18,21 @@ test("rejects reorg conflicts and duplicate redemption requests", () => {
   assert.throws(() => buildRwaCheckpoint({ projectId: "sample", chainId: 1952, contractAddress, fromBlock: 10, toBlock: 10, confirmationBlock: 22, events: [event("Deposit", 0, { amount: "1" }, "0xa"), event("Deposit", 1, { amount: "1" }, "0xb")] }), /reorganization/);
   assert.throws(() => buildRwaCheckpoint({ projectId: "sample", chainId: 1952, contractAddress, fromBlock: 10, toBlock: 10, confirmationBlock: 22, events: [event("RedemptionRequested", 0, { requestId: "r1", amount: "1" }), event("RedemptionRequested", 1, { requestId: "r1", amount: "1" })] }), /Duplicate redemption/);
 });
+
+test("roots only confirmed events in the checkpoint range", () => {
+  const checkpoint = buildRwaCheckpoint({ projectId: "sample", chainId: 1952, contractAddress, fromBlock: 10, toBlock: 10, confirmationBlock: 22, events: [event("Deposit", 0, { amount: "1" }), { ...event("Deposit", 1, { amount: "99" }), blockNumber: "11" }] });
+  assert.equal(checkpoint.accounts[0].principal, "1");
+  assert.equal(checkpoint.eventCount, 1);
+  assert.equal(checkpoint.events, undefined);
+});
+
+test("settles a redemption requested in an earlier checkpoint", () => {
+  const checkpoint = buildRwaCheckpoint({
+    projectId: "sample", chainId: 1952, contractAddress, fromBlock: 11, toBlock: 11, confirmationBlock: 22,
+    previousAccounts: { [account]: { principal: "100", yield: "0", pendingRedemption: "20" } },
+    previousRedemptions: [{ requestId: "r1", account, amount: "20", status: "QUEUED" }],
+    events: [{ ...event("RedemptionSettled", 0, { requestId: "r1", amount: "20" }), blockNumber: "11" }],
+  });
+  assert.equal(checkpoint.accounts[0].pendingRedemption, "0");
+  assert.equal(checkpoint.redemptions[0].status, "SETTLED");
+});
