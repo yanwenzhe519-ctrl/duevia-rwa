@@ -22,6 +22,21 @@ const factory = "0x4e59b44847b379578588920cA78FbF26c0B4956C" as Address;
 const projectWallet = "0x05667de34ad47bafe8a8b976c19809cadf7719d2";
 const governanceWallets = [projectWallet, "0xcf4f92fbe73fb01de45cdc4e370126963c851b51", "0x0bfc04d69f2c407e1571a3582314cd66058cd29e"];
 const observerWallets = ["0x4b2b20213de88a66c2d2ba458733b8e599c93bad", "0x0cd03c1760b5b1c0ca0f065dc931ad3e86b730dd", "0x6431727d667d9dddea1df49e4627b7403f791f0a"];
+const verifiedTakeoverMultisig = "0x11d698C4b9771BEc4C3DF7F27D07d2D9bEC7BB3c" as Address;
+const verifiedTakeoverContracts = {
+  rwaRegistry: "0xaeCA0FEe07Debea353eB0728EdD1e9D917a94297",
+  checkpointRegistry: "0x9fB26d32750f387c75F9577135a6E274730759D2",
+  incidentStateMachine: "0xBb9dfb771248594A365cabe0114cf362d68279a7",
+  rwaVault: "0x00344E2e44AFf7cF7429738E99Fd056a099A077F",
+  recoveryAdapterV2: "0x3d901880b9416ad7b00569C7b0B67b8e8008d6Af",
+} as const;
+const takeoverRolePlan = [
+  ["RWA Registry", "rwaRegistry", "DEFAULT_ADMIN_ROLE"], ["RWA Registry", "rwaRegistry", "REGISTRAR_ROLE"],
+  ["Checkpoint Registry", "checkpointRegistry", "DEFAULT_ADMIN_ROLE"], ["Checkpoint Registry", "checkpointRegistry", "CHECKPOINTER_ROLE"],
+  ["Incident State Machine", "incidentStateMachine", "DEFAULT_ADMIN_ROLE"], ["Incident State Machine", "incidentStateMachine", "OPERATOR_ROLE"], ["Incident State Machine", "incidentStateMachine", "GOVERNANCE_ROLE"], ["Incident State Machine", "incidentStateMachine", "EXECUTOR_ROLE"],
+  ["RWA Vault", "rwaVault", "DEFAULT_ADMIN_ROLE"], ["RWA Vault", "rwaVault", "SERVICER_ROLE"],
+  ["Recovery Adapter V2", "recoveryAdapterV2", "DEFAULT_ADMIN_ROLE"], ["Recovery Adapter V2", "recoveryAdapterV2", "EXECUTOR_ROLE"],
+] as const;
 const demoProjectId = keccak256(stringToHex("duevia:xlayer-demo-rwa:v3"));
 const short = (value: string) => `${value.slice(0, 6)}…${value.slice(-4)}`;
 const publicClient = createPublicClient({ chain, transport: http("https://testrpc.xlayer.tech") });
@@ -229,6 +244,21 @@ export default function InfrastructureDeployer({ wallet, registryAddress }: { wa
     finally { setRunning(false); }
   };
 
+  const grantTakeoverRole = async (contractKey: keyof typeof verifiedTakeoverContracts, roleName: string, label: string) => {
+    setRunning(true);
+    try {
+      const account = await requireBootstrap();
+      const address = verifiedTakeoverContracts[contractKey] as Address;
+      const abi = contractKey === "rwaRegistry" ? dueviaRwaRegistryAbi : contractKey === "checkpointRegistry" ? dueviaCheckpointRegistryAbi : contractKey === "incidentStateMachine" ? dueviaIncidentStateMachineAbi : contractKey === "rwaVault" ? dueviaRwaVaultAbi : dueviaRecoveryAdapterV2Abi;
+      const role = (roleName === "DEFAULT_ADMIN_ROLE" ? `0x${"0".repeat(64)}` : keccak256(stringToHex(roleName))) as Hex;
+      const alreadyGranted = await publicClient.readContract({ address, abi, functionName: "hasRole", args: [role, verifiedTakeoverMultisig] });
+      if (alreadyGranted) { setNotice(`${label} already granted to Recovery Multisig.`); return; }
+      const result = await write(account, address, abi, "grantRole", [role, verifiedTakeoverMultisig]);
+      setNotice(`${label} granted to Recovery Multisig · ${result.hash}`);
+    } catch (error) { setNotice(`${label} failed: ${(error instanceof Error ? error.message : String(error)).slice(0, 240)}`); }
+    finally { setRunning(false); }
+  };
+
   const startOwnershipTransfer = async () => {
     setRunning(true);
     try {
@@ -374,6 +404,11 @@ export default function InfrastructureDeployer({ wallet, registryAddress }: { wa
       <div className="continuity-buttons"><button type="button" className="upload-package" onClick={() => deployTakeover("rwaRegistry")} disabled={running || Boolean(rwaRegistry)}>Deploy RWA Registry</button><button type="button" className="upload-package" onClick={() => deployTakeover("checkpointRegistry")} disabled={running || Boolean(checkpointRegistry)}>Deploy Checkpoint Registry</button><button type="button" className="upload-package" onClick={() => deployTakeover("incidentMachine")} disabled={running || Boolean(incidentMachine)}>Deploy Incident State Machine</button></div>
       <div className="continuity-buttons"><button type="button" className="upload-package" onClick={() => deployTakeover("rwaVault")} disabled={running || Boolean(rwaVault)}>Deploy RWA Vault</button><button type="button" className="upload-package" onClick={() => deployTakeover("recoveryAdapter")} disabled={running || !rwaVault || Boolean(recoveryAdapter)}>Deploy Recovery Adapter V2</button><button type="button" className="anchor-button" onClick={authorizeRecoveryAdapter} disabled={running || !rwaVault || !recoveryAdapter}>Authorize Adapter on Vault</button></div>
       <small className="proof-note">New takeover contracts are immutable X Layer Testnet deployments. Addresses and transaction hashes are stored in this browser session until they are copied into the project registry.</small>
+    </div>
+    <div className="governance-console">
+      <div className="governance-heading"><span>TAKEOVER GOVERNANCE HANDOFF · TESTNET</span><strong>GRANT BEFORE REVOKE</strong></div>
+      <p className="proof-note">These controls use the RPC-verified takeover addresses and the already deployed Recovery Multisig. Each button sends one role grant; bootstrap permissions are not revoked automatically.</p>
+      <div className="governance-actions takeover-role-actions">{takeoverRolePlan.map(([label, key, role]) => <div key={`${key}-${role}`}><span>{label} · {role}</span><button type="button" onClick={() => void grantTakeoverRole(key, role, `${label} ${role}`)} disabled={running}>Grant</button></div>)}</div>
     </div>
     <div className="continuity-buttons"><button className="upload-package" type="button" onClick={() => deploy("coordinator")} disabled={running || Boolean(coordinator)}>Deploy Coordinator</button><button className="upload-package" type="button" onClick={() => deploy("guard")} disabled={running || !coordinator || !registryAddress || Boolean(continuityGuard)}>Deploy Dual Guard</button><button className="anchor-button" type="button" onClick={() => deploy("pool")} disabled={running || !continuityGuard || Boolean(continuityPool)}>Deploy Continuity Pool</button></div>
     <div className="governance-console">
