@@ -599,9 +599,9 @@ async function performInvestigation(question: string, contextObject: unknown, en
     if (deterministicValidation.valid) {
       for (let attempt = 0; attempt < 2; attempt += 1) {
         try {
-          const verifierOutput = await env.AI.run(verifierModel, { response_format: { type: "json_schema", json_schema: { type: "object", properties: { valid: { type: "boolean" }, unsupportedClaims: { type: "array", items: { type: "string" } }, reason: { type: "string" } }, required: ["valid", "unsupportedClaims", "reason"], additionalProperties: false } }, messages: [
+          const verifierOutput = await env.AI.run(verifierModel, { max_tokens: 512, temperature: 0, messages: [
             { role: "system", content: "You are an independent evidence verifier. Return valid JSON only. Reject any factual claim not supported by the supplied structured evidence. A material action is safe when its requiresApproval field is true: that means the action is explicitly approval-gated, not pre-approved. Reject only actions with requiresApproval false or missing." },
-            { role: "user", content: `Evidence catalog: ${JSON.stringify(evidenceIds)}. The context-root ID refers to the complete supplied context when present.\nEvidence:\n${context}\n\nCandidate investigation:\n${JSON.stringify(investigation)}\n\nReturn ${JSON.stringify({ valid: true, unsupportedClaims: ["string"], reason: "string" })}.` },
+            { role: "user", content: `Evidence catalog: ${JSON.stringify(evidenceIds)}. The context-root ID refers to the complete supplied context when present.\nEvidence:\n${context}\n\nCandidate investigation:\n${JSON.stringify(investigation)}\n\nReturn exactly one JSON object with this shape and no prose: ${JSON.stringify({ valid: true, unsupportedClaims: [], reason: "supported" })}.` },
           ] });
           modelValidation = validateModelVerifier(modelResponseObject(verifierOutput));
           break;
@@ -644,12 +644,12 @@ async function performAccountReconstruction(projectId: string, body: Record<stri
   });
   const reconstruction = modelResponseObject(primary) as Record<string, unknown>;
   const deterministicValidation = validateAccountReconstruction(reconstruction, evidenceInput);
-  const verifierSchema = { type: "object", properties: { valid: { type: "boolean" }, duplicateAssets: { type: "array", items: { type: "string" } }, omittedLiabilities: { type: "array", items: { type: "string" } }, chronologyConflicts: { type: "array", items: { type: "string" } }, chainConflicts: { type: "array", items: { type: "string" } }, unknownEvidenceRefs: { type: "array", items: { type: "string" } }, conservationFailures: { type: "array", items: { type: "string" } }, reason: { type: "string" } }, required: ["valid", "duplicateAssets", "omittedLiabilities", "chronologyConflicts", "chainConflicts", "unknownEvidenceRefs", "conservationFailures", "reason"], additionalProperties: false };
   const verifierOutput = await env.AI.run(verifierModel, {
-    response_format: { type: "json_schema", json_schema: verifierSchema },
+    max_tokens: 1_024,
+    temperature: 0,
     messages: [
       { role: "system", content: "Act as an adversarial RWA reconstruction verifier. Seek counter-evidence: duplicate assets, omitted liabilities/redemptions, chronology errors, conflicts with chain events, nonexistent citations, and conservation failures. Do not summarize." },
-      { role: "user", content: `Evidence:\n${JSON.stringify(evidenceInput).slice(0, 55_000)}\nCandidate reconstruction:\n${JSON.stringify(reconstruction).slice(0, 35_000)}` },
+      { role: "user", content: `Evidence:\n${JSON.stringify(evidenceInput).slice(0, 55_000)}\nCandidate reconstruction:\n${JSON.stringify(reconstruction).slice(0, 35_000)}\n\nReturn exactly one JSON object with these keys and no prose: ${JSON.stringify({ valid: true, duplicateAssets: [], omittedLiabilities: [], chronologyConflicts: [], chainConflicts: [], unknownEvidenceRefs: [], conservationFailures: [], reason: "no counter-evidence" })}` },
     ],
   });
   const counterEvidence = modelResponseObject(verifierOutput) as Record<string, unknown>;
