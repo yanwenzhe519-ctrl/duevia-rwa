@@ -52,3 +52,6 @@ Transaction `0x7ca1b72c541b4179dae61d793a423d8adc7103c6c99f54b0c900360b7ecebf71`
 ## Mainnet prohibition
 
 Do not deploy to mainnet or enable automatic broadcasting until an independent contract audit, key-management review, incident-response exercise, real data adapter pilot, gas policy, and rollback plan have been completed.
+# Audit hardening gate (2026-08-20)
+
+Before any testnet write, verify the five takeover contracts and their roles from `/api/evidence` plus read-only RPC. The current deployment is TAKEOVER runtime but bootstrap-controlled; do not describe it as Recovery Multisig-governed. Keep AI `DEGRADED` / `review-required` and explain `NO VALIDATED CANDIDATE` as insufficient evidence, not a wallet failure. Do not rewrite historical `UNKNOWN` finality statuses.

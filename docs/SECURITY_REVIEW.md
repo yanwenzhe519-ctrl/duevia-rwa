@@ -26,3 +26,10 @@ This is a maintainer threat review, not an independent audit.
 - Full mainnet deployment rehearsal and rollback exercise.
 
 No document in this repository should be represented as third-party audit assurance.
+# 2026-08-20 testnet hardening gate
+
+- X Layer Testnet chain ID is `1952`; the five takeover addresses must be read from verified deployment evidence, never inferred from transaction order.
+- The deployed takeover stack remains bootstrap-controlled until an explicitly approved governance handoff. Recovery Multisig authorization is not implied by its address being recorded.
+- AI health is currently `DEGRADED` / `review-required`. `NO VALIDATED CANDIDATE` means no evidence-sufficient reconstruction passed deterministic and independent verification; it is not a wallet error.
+- Historical checkpoints with `UNKNOWN` finality metadata must remain unchanged. New checkpoints require confirmation depth and `rpcUrl`.
+- Redemption settlement must bind request ID to account and amount and consume the request exactly once. Source hardening is not a deployed-chain upgrade until separately approved.
