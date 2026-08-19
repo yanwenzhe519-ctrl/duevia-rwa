@@ -229,7 +229,7 @@ async function runKeeperOnce(env: Env, startedAt: string, triggerSource: string,
           let aiValidated = false;
           try {
             const existingInvestigation = await env.WATCHDOG_DB.prepare("SELECT investigation_id, created_at, valid FROM ai_investigations WHERE incident_id = ? AND recovery_root = ? ORDER BY created_at DESC LIMIT 1").bind(capsule.incidentId, capsule.recoveryRoot).first<{ investigation_id: string; created_at: string; valid: number }>();
-            aiValidated = Boolean(existingInvestigation?.valid);
+            aiValidated = Number(existingInvestigation?.valid) === 1;
             const existingAge = existingInvestigation?.created_at ? Date.parse(existingInvestigation.created_at) : Number.NaN;
             const retryFailedInvestigation = Boolean(existingInvestigation && !aiValidated && (!Number.isFinite(existingAge) || Date.parse(startedAt) - existingAge >= AI_RETRY_COOLDOWN_MS));
             if (!existingInvestigation || retryFailedInvestigation) {
