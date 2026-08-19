@@ -64,7 +64,7 @@ The browser stores replacement evidence separately under `hardenedReplacement`; 
 
 The hardened replacement cutover is recorded in D1 migration `0012_hardened_vault_cutover.sql`. It changes only the active `DUEVIA-RCV-018` Vault/Adapter pointers; the legacy deployment evidence and historical checkpoint finality metadata remain unchanged. Rollback is the inverse pointer update to the verified legacy addresses, subject to governance approval.
 
-The public AI health endpoint must continue to report `DEGRADED` / `review-required` when validation fails. In the current testnet record, the latest investigation failed because `facts must contain at least one cited claim`; this is an evidence-quality failure, not a wallet failure and not a validated candidate.
+The public AI health endpoint must continue to report `DEGRADED` / `review-required` when validation fails. The historical testnet record failed because `facts must contain at least one cited claim`; the verifier prompt also now explicitly treats `requiresApproval: true` as an approval gate rather than an absent approval. A live post-fix diagnostic returned `validation.valid = true` and `model-grounded`; the persisted health row changes only after the next scheduled Keeper run. These are evidence-quality controls, not wallet errors, and no validated candidate is fabricated.
 
 ## Mainnet prohibition
 
