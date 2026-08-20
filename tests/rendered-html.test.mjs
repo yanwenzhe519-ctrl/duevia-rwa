@@ -219,3 +219,14 @@ test("takeover writes require authorization and AI health is explicit about read
   assert.match(vaultMigration, /WHERE pool_id = 'DUEVIA-RCV-018'/);
   assert.match(worker, /takeoverAuthorization/);
 });
+
+test("public overview reports verified AI and testnet scope accurately", async () => {
+  const [overview, homepage] = await Promise.all([
+    readFile(new URL("../app/live-overview.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
+  ]);
+  assert.match(overview, /readiness === "READY"/);
+  assert.match(overview, /X Layer Testnet/);
+  assert.doesNotMatch(overview, /quota unprobed|mainnet-ready architecture/);
+  assert.doesNotMatch(homepage, /Mainnet-ready policy layer/);
+});

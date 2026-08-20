@@ -68,6 +68,8 @@ The five immutable takeover contracts and the adapter authorization are publishe
 
 Adapter authorization transaction `0x7ca1b72c541b4179dae61d793a423d8adc7103c6c99f54b0c900360b7ecebf71` grants `keccak256("ADAPTER_ROLE")` on the RWA Vault to Recovery Adapter V2 and emits the matching `RoleGranted` event.
 
+The active redemption-replay-hardened replacement is the separate `hardenedReplacement` runtime published by `/api/evidence`: Vault `0x437Fcbb7b474036FB534e0AFFafdB600D970d798` and Adapter `0xeA1dbe4F4F8640214C1538210B494F5850537599`. The takeover RWA Vault and Recovery Adapter V2 rows above remain immutable historical deployment evidence; they are not the active `DUEVIA-RCV-018` runtime.
+
 ## Final-stack incident rehearsal
 
 - Project ID: `0x5c939e6382044f5bf74e865f5b497f038c90ec9dc65b96b36bd8b5d434ab3477`
