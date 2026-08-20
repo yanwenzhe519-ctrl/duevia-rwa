@@ -230,3 +230,20 @@ test("public overview reports verified AI and testnet scope accurately", async (
   assert.doesNotMatch(overview, /quota unprobed|mainnet-ready architecture/);
   assert.doesNotMatch(homepage, /Mainnet-ready policy layer/);
 });
+
+test("public runtime status cannot become stale or imply an unconfirmed pause", async () => {
+  const [worker, takeover, continuity, proof] = await Promise.all([
+    readFile(new URL("../worker/index.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/app/takeover-runtime.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/app/continuity-agent.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/proof/page.tsx", import.meta.url), "utf8"),
+  ]);
+  assert.match(worker, /Date\.now\(\) - checkedAt <= 30 \* 60 \* 1000/);
+  assert.match(worker, /older than 30 minutes/);
+  assert.match(takeover, /item\.pool_id === "DUEVIA-RCV-018"/);
+  assert.match(continuity, /Recovery protection prepared/);
+  assert.match(continuity, /Onchain pause requires explicit approval/);
+  assert.doesNotMatch(continuity, /New issuance and pool deposits are now blocked/);
+  assert.match(proof, /04 \/ LIVE RUNTIME/);
+  assert.match(proof, /05 \/ DELIVERY STATUS/);
+});

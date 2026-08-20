@@ -761,11 +761,15 @@ const worker = {
         const latest = await env.WATCHDOG_DB.prepare("SELECT valid, created_at, validation_json FROM ai_investigations ORDER BY created_at DESC LIMIT 1").first<{ valid?: number; created_at?: string; validation_json?: string }>();
         if (latest?.created_at) {
           lastCheckedAt = latest.created_at;
-          readiness = Number(latest.valid) === 1 ? "READY" : "DEGRADED";
+          const checkedAt = Date.parse(latest.created_at);
+          const fresh = Number.isFinite(checkedAt) && Date.now() - checkedAt <= 30 * 60 * 1000;
+          readiness = Number(latest.valid) === 1 && fresh ? "READY" : "DEGRADED";
           if (readiness === "DEGRADED") {
             try {
               const validation = JSON.parse(String(latest.validation_json || "{}")) as { verifier?: { reason?: string; violations?: string[] }; deterministic?: { errors?: string[]; violations?: string[] } };
-              lastError = String(validation.verifier?.reason || validation.deterministic?.violations?.[0] || validation.deterministic?.errors?.[0] || validation.verifier?.violations?.[0] || "Latest AI investigation did not pass validation.").slice(0, 240);
+              lastError = Number(latest.valid) !== 1
+                ? String(validation.verifier?.reason || validation.deterministic?.violations?.[0] || validation.deterministic?.errors?.[0] || validation.verifier?.violations?.[0] || "Latest AI investigation did not pass validation.").slice(0, 240)
+                : "Latest verified AI investigation is older than 30 minutes.";
             } catch { lastError = "Latest AI investigation did not pass validation."; }
           }
         }

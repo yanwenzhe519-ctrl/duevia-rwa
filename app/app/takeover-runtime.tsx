@@ -26,7 +26,7 @@ export default function TakeoverRuntime() {
       const projectsResponse = await fetch("/api/watchdog/projects", { cache: "no-store" });
       if (!projectsResponse.ok) throw new Error(`Project registry returned HTTP ${projectsResponse.status}.`);
       const projectsPayload = await projectsResponse.json() as { projects?: Project[] };
-      const selected = projectsPayload.projects?.find((item) => item.contract_address) || null;
+      const selected = projectsPayload.projects?.find((item) => item.pool_id === "DUEVIA-RCV-018") || null;
       if (!selected) { setProject(null); setState("empty"); return; }
       setProject(selected);
       const root = `/api/rwa/${encodeURIComponent(selected.pool_id)}`;

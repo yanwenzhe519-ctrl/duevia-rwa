@@ -62,7 +62,7 @@ export default function ContinuityAgent({
     setNotice("No heartbeat received. Duevia is protecting the pool before reconstructing state.");
     setEvents((current) => [...current, { title: "Heartbeat SLA breached", detail: feedContext ? `${feedContext.ageHours.toFixed(1)} hours · ${feedContext.source}` : "72 hours · labelled demo feed", tone: "warn" }]);
     await new Promise((resolve) => window.setTimeout(resolve, 800));
-    setEvents((current) => [...current, { title: "X Layer circuit breaker armed", detail: "New issuance and pool deposits are now blocked", tone: "chain" }]);
+    setEvents((current) => [...current, { title: "Recovery protection prepared", detail: "Onchain pause requires explicit approval", tone: "chain" }]);
     await new Promise((resolve) => window.setTimeout(resolve, 800));
     if (!recoveryCapsule) {
       try {
