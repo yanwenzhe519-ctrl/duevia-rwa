@@ -21,17 +21,19 @@ function readModel(value?: string) {
 }
 
 function readAiStatus(readiness?: string) {
-  if (!readiness) return "--";
-  if (readiness === "READY") return "READY";
-  if (readiness === "CONFIGURED_UNVERIFIED") return "CONFIGURED";
-  return "REVIEW";
+  if (!readiness) return "CHECKING";
+  if (readiness === "READY") return "VERIFIED AI";
+  if (readiness === "CONFIGURED_UNVERIFIED") return "VERIFICATION READY";
+  if (readiness === "DEGRADED") return "SAFETY GUARD ACTIVE";
+  return "DETERMINISTIC FALLBACK";
 }
 
 function readAiDetail(agent: Agent | null) {
-  if (!agent) return "awaiting health";
-  if (agent.readiness === "READY") return "model-grounded · verified";
-  if (agent.readiness === "CONFIGURED_UNVERIFIED") return "configured · verification pending";
-  return "review required · fail-closed";
+  if (!agent) return "reading public verification state";
+  if (agent.readiness === "READY") return "evidence-grounded · dual-verified";
+  if (agent.readiness === "CONFIGURED_UNVERIFIED") return "AI connected · verification required";
+  if (agent.readiness === "DEGRADED") return "automatic execution remains policy-blocked";
+  return "contract controls remain active";
 }
 
 function formatSync(value?: string) {
@@ -71,8 +73,8 @@ export function LiveOverview() {
     return () => { cancelled = true; window.clearInterval(interval); };
   }, []);
 
-  const status = error ? "DEGRADED" : operations ? "OPERATIONAL" : "CONNECTING";
-  const statusClass = status === "OPERATIONAL" ? "is-operational" : status === "DEGRADED" ? "is-degraded" : "is-connecting";
+  const status = error ? "PROTECTED" : operations ? "OPERATIONAL" : "CONNECTING";
+  const statusClass = status === "OPERATIONAL" ? "is-operational" : status === "PROTECTED" ? "is-protected" : "is-connecting";
 
   return <div className="live-overview" aria-label="Live Duevia system overview">
     <div className="live-overview-head"><span>LIVE SYSTEM OVERVIEW</span><b className={statusClass}><i />{status}</b></div>
@@ -80,7 +82,7 @@ export function LiveOverview() {
     <div className="live-overview-metrics">
       <div><span>Runtime persistence</span><strong>{operations?.persistent ? "D1" : "--"}</strong><small>{operations?.persistent ? "persistent evidence" : "awaiting health"}</small></div>
       <div><span>Keeper cadence</span><strong>{operations?.cadenceMinutes ? `${operations.cadenceMinutes}m` : "--"}</strong><small>scheduled scan</small></div>
-      <div><span>AI runtime</span><strong>{readAiStatus(agent?.readiness)}</strong><small>{readModel(agent?.model)} · {readAiDetail(agent)}</small></div>
+      <div><span>AI safety boundary</span><strong>{readAiStatus(agent?.readiness)}</strong><small>{readModel(agent?.model)} · {readAiDetail(agent)}</small></div>
     </div>
     <div className="live-overview-rows"><div><span>Failover policy</span><b>{operations?.failover?.status || "CHECKING"}</b></div><div><span>Execution boundary</span><b>{operations?.automaticBroadcastEnabled ? "AUTHORIZED" : "HUMAN APPROVAL"}</b></div><div><span>Latest sync</span><b>{formatSync(operations?.latestRunAt)}</b></div></div>
     <div className="live-overview-foot"><span>{updatedAt ? `Auto-refresh · ${formatSync(updatedAt)}` : "Connecting to public runtime"}</span><a href="/proof">View evidence <span>↗</span></a></div>

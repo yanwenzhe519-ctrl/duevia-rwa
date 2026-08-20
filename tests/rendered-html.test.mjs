@@ -226,7 +226,15 @@ test("public overview reports verified AI and testnet scope accurately", async (
     readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
   ]);
   assert.match(overview, /readiness === "READY"/);
+  assert.match(overview, /SAFETY GUARD ACTIVE/);
+  assert.match(overview, /automatic execution remains policy-blocked/);
+  assert.doesNotMatch(overview, /return "REVIEW"/);
   assert.match(overview, /X Layer Testnet/);
+  assert.match(homepage, /Final contracts deployed/);
+  assert.match(homepage, /Invariant calls · 0 reverts/);
+  assert.match(homepage, /One outage/);
+  assert.match(homepage, /Four accountable questions/);
+  assert.match(homepage, /EVIDENCE-GROUNDED AI TRACE/);
   assert.doesNotMatch(overview, /quota unprobed|mainnet-ready architecture/);
   assert.doesNotMatch(homepage, /Mainnet-ready policy layer/);
 });
