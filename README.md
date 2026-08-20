@@ -1,6 +1,41 @@
 # Duevia RWA
 
-Duevia RWA is asset assurance infrastructure for tokenized private markets. It turns fragmented offchain evidence into a versioned, policy-enforceable assurance status that can be monitored and anchored on X Layer without publishing private commercial data.
+> **The continuity layer for tokenized real-world assets.**
+
+Duevia connects AI-powered evidence intelligence to deterministic RWA policy. When servicing, reconciliation, reporting, or redemption operations become fragmented or unavailable, it helps an asset protocol detect the failure, reconstruct a bounded operating state, protect unsafe flows, and coordinate a governed successor handoff.
+
+Tokenization puts ownership and settlement onchain, but the operating truth of an asset still lives across servicers, spreadsheets, payment files, custodians, and public signals. Duevia is built for that missing layer: AI interprets the messy evidence; policy contracts turn a verified state into accountable asset behavior; governance and observers provide the continuity boundary.
+
+## Start here
+
+- **Website:** [duevia.finance](https://duevia.finance)
+- **Live DApp:** [duevia.finance/app](https://duevia.finance/app)
+- **Public Proof:** [duevia.finance/proof](https://duevia.finance/proof)
+- **Evidence API:** [duevia.finance/api/evidence](https://duevia.finance/api/evidence)
+- **Network:** X Layer Testnet, chain ID `1952`
+
+## Why AI + RWA belongs together
+
+RWA operations produce evidence that is too irregular for contracts to interpret directly: servicing reports, payment records, reconciliations, notices, market signals, and independent observations. Duevia uses AI to connect those fragments, identify conflicts and missing evidence, and produce a structured recovery capsule with evidence references, confidence, approvals, and a deterministic `recoveryRoot`.
+
+That intelligence is not left as a narrative summary. It is joined to the asset's own policy: eligibility, checkpoint freshness, incident state, pause conditions, successor permissions, and redemption rules. This creates a bridge between operational reality and programmable capital flows, turning AI from a chat surface into a useful component of RWA infrastructure.
+
+## What makes Duevia infrastructure
+
+- **Continuity, not just monitoring:** moves from a missing heartbeat to a reconstructed state and successor workflow.
+- **Evidence-to-policy bridge:** converts heterogeneous servicing evidence into a versioned, policy-aware state.
+- **Independent verification:** schema-constrained investigation is checked by a separate verifier; conflicts fail closed into review.
+- **Deterministic enforcement:** registry, checkpoint, incident, guard, vault, pool, and redemption paths enforce the rules that AI cannot rewrite.
+- **Governed handoff:** observer evidence, Recovery Multisig approvals, and explicit successor permissions define who can change state.
+- **Portable recovery state:** Recovery Capsules and roots give a successor a verifiable starting point instead of an opaque spreadsheet.
+
+## Implemented testnet system
+
+The current X Layer Testnet implementation is a working infrastructure prototype, not a claim of mainnet scale. It includes a live DApp, Cloudflare Workers AI, persistent D1 evidence, a five-minute X Layer scanner, scheduled Keeper failover, observer signatures with replay protection, recovery capsules, hardened redemption replay handling, and public release provenance. The full address, transaction, bytecode, authorization, and rehearsal evidence remains on the [Proof page](https://duevia.finance/proof), where it can be checked independently.
+
+## The long-term direction
+
+Duevia is designed to grow from a recovery workflow into the operating standard for resilient tokenized capital: institutional servicer and custodian connectors, portable evidence rails, compliance-aware recovery policies, cross-asset coordination, successor-servicer networks, and mainnet-grade settlement and custody integrations. The ambition is simple: make continuity a native property of every tokenized asset, not an emergency process invented after the service has already failed.
 
 ## What the MVP demonstrates
 

@@ -18,18 +18,23 @@ export default function ProofPage() {
     <section className="proof-hero shell">
       <span className="section-index">X LAYER AI SEASON / EVIDENCE</span>
       <h1>Claims should be<br /><em>checkable.</em></h1>
-      <p>Duevia publishes only evidence that can be checked in code, on X Layer Testnet, or through its live runtime. Test fixtures and pending deployment work are labelled separately.</p>
+      <p>Duevia is building the continuity layer for tokenized real-world assets. This page separates the product idea, the live runtime, and the X Layer Testnet evidence so reviewers can understand the system first and verify each claim independently.</p>
       <div className="proof-links"><Link className="button-dark" href="/app">Open live DApp <span>→</span></Link><a className="button-quiet" href="https://github.com/yanwenzhe519-ctrl/duevia-rwa" target="_blank" rel="noreferrer">Inspect source code</a></div>
       <ReleaseProof />
     </section>
 
+    <section className="proof-section shell">
+      <div className="proof-heading"><div><span className="section-index">01 / THE SYSTEM</span><h2>From operational evidence<br />to asset continuity.</h2></div><p>AI handles the ambiguity of servicing evidence. RWA policy gives the resulting state a deterministic place in the asset lifecycle.</p></div>
+      <div className="readiness-grid"><article className="readiness-ready"><span>UNDERSTAND</span><h3>Evidence intelligence</h3><p>Servicing feeds, payment records, public signals, and observer reports are reconciled into a structured, reviewable recovery capsule.</p></article><article className="readiness-ready"><span>PROTECT</span><h3>Policy-aware state</h3><p>Eligibility, checkpoint freshness, incident state, pause conditions, and redemption rules connect the reconstructed state to capital-flow decisions.</p></article><article className="readiness-ready"><span>CONTINUE</span><h3>Governed handoff</h3><p>Recovery roots, observer evidence, and successor approvals create a portable starting point for the next authorized operator.</p></article></div>
+    </section>
+
     <section className="proof-section shell readiness-section">
-      <div className="proof-heading"><div><span className="section-index">00 / SUBMISSION READINESS</span><h2>Ready for review.<br />Clear about the gaps.</h2></div><p>AI Season requires an AI product deployed on X Layer Testnet, an independently operated project X account, an official post mentioning @XLayerOfficial, and a complete Google Form submission.</p></div>
+      <div className="proof-heading"><div><span className="section-index">02 / SUBMISSION READINESS</span><h2>Ready for review.<br />Clear about the gaps.</h2></div><p>AI Season requires an AI product deployed on X Layer Testnet, an independently operated project X account, an official post mentioning @XLayerOfficial, and a complete Google Form submission.</p></div>
       <div className="readiness-grid"><article className="readiness-ready"><span>TECHNICAL GATE</span><h3>AI + X Layer Testnet</h3><p>Workers AI investigation, deterministic policy controls, six final contracts, and a full incident rehearsal are live and linked below.</p></article><article className="readiness-ready"><span>LIQUIDITY GRANT</span><h3>Evidence supports the case</h3><p>The grant is assessed on product performance, innovation, user value, and ecosystem contribution. The page publishes verifiable signals instead of claiming an award.</p></article><article className="readiness-boundary"><span>DATA BOUNDARY</span><h3>Testnet is labelled</h3><p>Current public metrics are testnet, demo, or shadow-runtime evidence. No mainnet TVL, real-user volume, or RWA scale is presented as fact.</p></article></div>
     </section>
 
     <section className="proof-section shell">
-      <div className="proof-heading"><div><span className="section-index">01 / TESTNET PROOF</span><h2>Existing X Layer evidence</h2></div><p>Network: X Layer Testnet, chain ID 1952. Links open the independent explorer rather than a Duevia-controlled dashboard.</p></div>
+      <div className="proof-heading"><div><span className="section-index">03 / TESTNET PROOF</span><h2>Existing X Layer evidence</h2></div><p>Network: X Layer Testnet, chain ID 1952. Links open the independent explorer rather than a Duevia-controlled dashboard.</p></div>
       <div className="evidence-list">{evidence.map((item) => <a key={item.label} href={item.href} target="_blank" rel="noreferrer" className="evidence-row"><div><b>{item.label}</b><small>{item.note}</small></div><code>{item.value}</code><span>View on OKLink →</span></a>)}</div>
     </section>
 
