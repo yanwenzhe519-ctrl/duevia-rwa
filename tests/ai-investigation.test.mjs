@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { collectEvidenceIds, failedInvestigation, modelResponseObject, parseModelJson, validateInvestigation, validateModelVerifier } from "../lib/ai-investigation.mjs";
+import { collectEvidenceIds, failedInvestigation, investigationNeedsRefresh, modelResponseObject, parseModelJson, validateInvestigation, validateModelVerifier } from "../lib/ai-investigation.mjs";
 
 const evidence = { observations: [{ observationId: "OBS-1", transactionHash: "0xtx" }], recoveryRoot: "0xroot" };
 const valid = { schema: "duevia.ai-investigation/v1", incidentId: "INC-1", summary: "Heartbeat and endpoint evidence support an outage review.", riskLevel: "HIGH", facts: [{ claim: "The observer reported an outage.", evidenceIds: ["OBS-1"] }], inferences: [{ claim: "Servicing may be interrupted.", basis: "Heartbeat and endpoint failure", confidence: "MEDIUM" }], missingEvidence: [{ item: "Bank confirmation", impact: "Cash recovery remains uncertain." }], recommendedActions: [{ action: "Suspend new deposits", reason: "Protect the pool while evidence is reviewed.", requiresApproval: true }] };
@@ -36,4 +36,13 @@ test("malformed model output becomes a persisted review-required investigation",
   assert.equal(fallback.incidentId, "INC-FAIL");
   assert.equal(fallback.recommendedActions[0].requiresApproval, true);
   assert.equal(validateInvestigation(fallback, ["OBS-1"]).valid, false);
+});
+
+test("verified investigations refresh before the public health window expires", () => {
+  const now = Date.parse("2026-08-21T00:30:00.000Z");
+  assert.equal(investigationNeedsRefresh(null, now), true);
+  assert.equal(investigationNeedsRefresh({ valid: 1, created_at: "2026-08-21T00:15:00.000Z" }, now), false);
+  assert.equal(investigationNeedsRefresh({ valid: 1, created_at: "2026-08-21T00:09:59.000Z" }, now), true);
+  assert.equal(investigationNeedsRefresh({ valid: 0, created_at: "2026-08-21T00:26:00.000Z" }, now), false);
+  assert.equal(investigationNeedsRefresh({ valid: 0, created_at: "2026-08-21T00:24:59.000Z" }, now), true);
 });

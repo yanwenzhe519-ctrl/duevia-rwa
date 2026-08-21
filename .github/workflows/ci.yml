@@ -18,11 +18,14 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
+      # Foundry's npm wrapper only selects an optional platform binary; its
+      # postinstall command is not portable to Windows and is unnecessary here.
+      - run: npm ci --ignore-scripts
       - run: npm run lint
       - run: npm run typecheck
       - run: npm run contracts:compile
       - run: git diff --exit-code -- 'lib/*-artifact.ts'
       - run: npm test
+      - run: npm run contracts:test
       - run: npm run bench:incidents
       - run: npm audit --audit-level=high

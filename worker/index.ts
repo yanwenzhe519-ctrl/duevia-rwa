@@ -6,7 +6,7 @@ import { scanXLayer } from "../lib/xlayer-scanner.mjs";
 import { decodeFunctionResult, encodeFunctionData, keccak256, stringToHex, verifyMessage, type Address } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { searchPublicIntelligence } from "../lib/public-intelligence.mjs";
-import { collectEvidenceIds, failedInvestigation, modelResponseObject, validateInvestigation, validateModelVerifier } from "../lib/ai-investigation.mjs";
+import { collectEvidenceIds, failedInvestigation, investigationNeedsRefresh, modelResponseObject, validateInvestigation, validateModelVerifier } from "../lib/ai-investigation.mjs";
 import { reconstructAssetState } from "../lib/reconstruction-engine.mjs";
 import { evaluateProjectRun, executionPolicy } from "../lib/keeper-policy.mjs";
 import { normalizeObserverEndpoints, normalizePublicEndpoint, parseObserverStatus, verifyObserverStatus } from "../lib/observer-adapter.mjs";
@@ -230,13 +230,16 @@ async function runKeeperOnce(env: Env, startedAt: string, triggerSource: string,
           try {
             const existingInvestigation = await env.WATCHDOG_DB.prepare("SELECT investigation_id, created_at, valid FROM ai_investigations WHERE incident_id = ? AND recovery_root = ? ORDER BY created_at DESC LIMIT 1").bind(capsule.incidentId, capsule.recoveryRoot).first<{ investigation_id: string; created_at: string; valid: number }>();
             aiValidated = Number(existingInvestigation?.valid) === 1;
-            const existingAge = existingInvestigation?.created_at ? Date.parse(existingInvestigation.created_at) : Number.NaN;
-            const retryFailedInvestigation = Boolean(existingInvestigation && !aiValidated && (!Number.isFinite(existingAge) || Date.parse(startedAt) - existingAge >= AI_RETRY_COOLDOWN_MS));
-            if (!existingInvestigation || retryFailedInvestigation) {
+            if (investigationNeedsRefresh(existingInvestigation, Date.parse(startedAt), { retryAfterMs: AI_RETRY_COOLDOWN_MS })) {
               const aiResult = await performInvestigation("Investigate this RWA servicing outage and the deterministic recovery capsule. Separate supported facts, inferences, missing evidence, and approval-gated actions.", { incident: evaluation, capsule }, env);
               aiValidated = aiResult.validation.valid;
-              await env.WATCHDOG_DB.prepare("INSERT INTO ai_investigations (investigation_id, incident_id, created_at, model, valid, result_json, validation_json, recovery_root) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
-                .bind(`ai:${capsule.incidentId}:${capsule.recoveryRoot.slice(2, 18)}:${Date.now()}`, capsule.incidentId, startedAt, aiResult.model, aiResult.validation.valid ? 1 : 0, JSON.stringify(aiResult.investigation), JSON.stringify(aiResult.validation), capsule.recoveryRoot).run();
+              const investigationId = `ai:${capsule.incidentId}:${capsule.recoveryRoot.slice(2, 18)}:${Date.now()}`;
+              await env.WATCHDOG_DB.batch([
+                env.WATCHDOG_DB.prepare("INSERT INTO ai_investigations (investigation_id, incident_id, created_at, model, valid, result_json, validation_json, recovery_root) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
+                  .bind(investigationId, capsule.incidentId, startedAt, aiResult.model, aiResult.validation.valid ? 1 : 0, JSON.stringify(aiResult.investigation), JSON.stringify(aiResult.validation), capsule.recoveryRoot),
+                env.WATCHDOG_DB.prepare("INSERT OR REPLACE INTO rwa_decision_traces (run_id, project_id, incident_id, model, verifier_model, status, capsule_hash, trace_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
+                  .bind(investigationId, capsule.poolId, capsule.incidentId, aiResult.model, aiResult.verifierModel, aiResult.validation.valid ? "EVIDENCE_GROUNDED" : "REVIEW_REQUIRED", capsule.recoveryRoot, JSON.stringify({ runId: investigationId, investigation: aiResult.investigation, deterministicValidation: aiResult.validation.deterministic, counterEvidence: aiResult.validation.verifier, recoveryCapsule: { recoveryRoot: capsule.recoveryRoot, state: capsule.state } }), startedAt),
+              ]);
             }
           } catch (error) {
             await persistObservation(env.WATCHDOG_DB, { observationId: `ai-error:${project.pool_id}:${Date.now()}`, poolId: project.pool_id, source: "ai-investigator", event: "AIInvestigationError", error: error instanceof Error ? error.message : String(error) });
@@ -381,6 +384,7 @@ function parseJsonRecord(value: unknown): Record<string, unknown> {
 function safeInvestigationSummary(row: Record<string, unknown>) {
   const result = parseJsonRecord(row.result_json);
   const validation = parseJsonRecord(row.validation_json);
+  const verifier = parseJsonRecord(validation.verifier);
   const facts = Array.isArray(result.facts) ? result.facts : [];
   const missingEvidence = Array.isArray(result.missingEvidence) ? result.missingEvidence : [];
   const recommendedActions = Array.isArray(result.recommendedActions) ? result.recommendedActions : [];
@@ -408,8 +412,8 @@ function safeInvestigationSummary(row: Record<string, unknown>) {
       return { action: String(entry.action || "Review recovery plan"), reason: String(entry.reason || ""), requiresApproval: entry.requiresApproval !== false };
     }),
     verifier: {
-      valid: Boolean(validation.valid),
-      reason: typeof validation.reason === "string" ? validation.reason : "Independent verifier result unavailable.",
+      valid: Boolean(verifier.valid ?? validation.valid),
+      reason: typeof verifier.reason === "string" && verifier.reason ? verifier.reason : "Independent verifier result unavailable.",
     },
   };
 }
@@ -679,7 +683,16 @@ async function takeoverApi(request: Request, env: Env, projectId: string, tail: 
     const project = await env.WATCHDOG_DB.prepare("SELECT pool_id, servicer_id, contract_address, rwa_registry_address, checkpoint_registry_address, incident_machine_address, rwa_vault_address, adapter_address, last_state, last_heartbeat_at, shadow_mode FROM projects WHERE pool_id = ?").bind(projectId).first<Record<string, unknown>>();
     if (!project) return Response.json({ ok: false, error: "RWA project not found." }, { status: 404 });
     const incident = await env.WATCHDOG_DB.prepare("SELECT incident_id, state, recovery_root, updated_at FROM incidents WHERE pool_id = ? ORDER BY updated_at DESC LIMIT 1").bind(projectId).first<Record<string, unknown>>();
-    return Response.json({ ok: true, projectId, project, incident, runtime: incident ? "TAKEOVER" : "PRIMARY_SERVICER" }, { headers: { "Cache-Control": "no-store" } });
+    const rehearsal = projectId === dueviaProject.poolId ? {
+      phase: "RECOVERY_REHEARSAL_COMPLETE",
+      recoveryRoot: dueviaFinalRehearsal.recoveryRoot,
+      incidentId: dueviaFinalRehearsal.incidentId,
+      completedSteps: dueviaFinalRehearsal.transactions.length,
+      finalTransaction: dueviaFinalRehearsal.transactions.at(-1)?.transaction || null,
+      network: "X Layer Testnet",
+    } : null;
+    const runtime = incident?.recovery_root ? "RECOVERY_READY" : rehearsal ? "RECOVERY_REHEARSAL_COMPLETE" : incident ? "TAKEOVER" : "PRIMARY_SERVICER";
+    return Response.json({ ok: true, projectId, project, incident, runtime, rehearsal }, { headers: { "Cache-Control": "no-store" } });
   }
   if (request.method === "GET" && segments[0] === "checkpoints") {
     const rows = await env.WATCHDOG_DB.prepare("SELECT checkpoint_id, project_id, chain_id, contract_address, from_block, to_block, confirmation_block, checkpoint_hash, checkpoint_json, created_at FROM rwa_checkpoints WHERE project_id = ? ORDER BY created_at DESC LIMIT 100").bind(projectId).all<Record<string, unknown>>();
@@ -758,7 +771,7 @@ const worker = {
       let lastCheckedAt: string | null = null;
       let lastError: string | null = null;
       if (configured) {
-        const latest = await env.WATCHDOG_DB.prepare("SELECT valid, created_at, validation_json FROM ai_investigations ORDER BY created_at DESC LIMIT 1").first<{ valid?: number; created_at?: string; validation_json?: string }>();
+        const latest = await env.WATCHDOG_DB.prepare("SELECT ai.valid, ai.created_at, ai.validation_json FROM ai_investigations ai LEFT JOIN incidents incident ON incident.incident_id = ai.incident_id ORDER BY CASE WHEN incident.pool_id = 'DUEVIA-RCV-018' THEN 0 ELSE 1 END, ai.created_at DESC LIMIT 1").first<{ valid?: number; created_at?: string; validation_json?: string }>();
         if (latest?.created_at) {
           lastCheckedAt = latest.created_at;
           const checkedAt = Date.parse(latest.created_at);

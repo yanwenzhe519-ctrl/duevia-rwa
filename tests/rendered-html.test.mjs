@@ -220,6 +220,14 @@ test("takeover writes require authorization and AI health is explicit about read
   assert.match(worker, /takeoverAuthorization/);
 });
 
+test("reference RWA recovery evidence is seeded for a closed-loop rehearsal", async () => {
+  const migration = await readFile(new URL("../drizzle/0013_reference_recovery_evidence.sql", import.meta.url), "utf8");
+  assert.match(migration, /DUEVIA-RCV-018/);
+  assert.match(migration, /reference-payment:INV-0814:20260819/);
+  assert.match(migration, /0xbc35fcf72a84353db732c9f1fe85c39fdb2be34d6bdead6ef924288c2dfb0363/);
+  assert.match(migration, /testnetReference/);
+});
+
 test("public overview reports verified AI and testnet scope accurately", async () => {
   const [overview, homepage] = await Promise.all([
     readFile(new URL("../app/live-overview.tsx", import.meta.url), "utf8"),

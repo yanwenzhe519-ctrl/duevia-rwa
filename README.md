@@ -87,7 +87,7 @@ Set `NEXT_PUBLIC_DUEVIA_REGISTRY_ADDRESS` after deploying the registry to enable
 Requirements: Node.js `22.13+` and a wallet that can switch to X Layer Testnet.
 
 ```bash
-npm install
+npm ci --ignore-scripts
 npm run dev
 ```
 
