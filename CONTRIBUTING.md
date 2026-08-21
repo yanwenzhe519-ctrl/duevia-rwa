@@ -3,7 +3,7 @@
 Install Node.js 22.13+ and run:
 
 ```bash
-npm ci
+npm ci --ignore-scripts
 npm run lint
 npm run typecheck
 npm test
