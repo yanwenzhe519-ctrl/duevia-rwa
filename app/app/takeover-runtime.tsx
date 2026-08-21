@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 type Project = { pool_id: string; project_name?: string; contract_address?: string; last_state?: string };
-type Checkpoint = { checkpoint_id: string; checkpoint_hash: string; confirmation_block: string; created_at: string };
+type Checkpoint = { checkpoint_id: string; checkpoint_hash: string; confirmation_block?: string | number; created_at: string };
 type Redemption = { request_id: string; account: string; amount: string; governance_status: string; execution_status: string };
 type CheckpointAccount = { account: string; checkpoint_id: string; principal: string; yield_amount: string; pending_redemption: string; updated_at: string };
 type AccountDiff = { account: string; previous: Record<string, string>; reconstructed: Record<string, string>; stateDiff: Record<string, string>; evidenceRefs: string[]; confidence: number };
@@ -58,6 +58,7 @@ export default function TakeoverRuntime() {
   useEffect(() => { void load(); }, [load]);
   const candidate = trace?.trace?.reconstruction?.candidates?.[0];
   const account = candidate?.accounts?.[0];
+  const checkpointLabel = checkpoint?.confirmation_block ? `Block ${checkpoint.confirmation_block}` : checkpoint ? "Checkpoint recorded" : "Awaiting first checkpoint";
 
   return <section className="takeover-runtime" aria-live="polite">
     <header className="takeover-runtime-head"><div><h3>Service takeover runtime</h3><p>AI reconstructs. Governance authorizes. X Layer executes.</p></div><button type="button" onClick={() => void load()} disabled={state === "loading"}>{state === "loading" ? "Refreshing" : "Refresh runtime"}</button></header>
@@ -67,7 +68,7 @@ export default function TakeoverRuntime() {
     {state === "live" && project && <><div className="takeover-summary">
       <div><span>RWA PROJECT</span><strong>{project.project_name || project.pool_id}</strong><code>{project.contract_address}</code></div>
       <div><span>CONTINUITY STATE</span><strong>{runtime === "RECOVERY_READY" || runtime === "RECOVERY_REHEARSAL_COMPLETE" ? "RECOVERY READY" : String(incident?.state || project.last_state || "ACTIVE")}</strong><small>{rehearsal ? `${rehearsal.completedSteps}-step ${rehearsal.network} rehearsal verified` : incident ? String(incident.incident_id || "Incident recorded") : "Primary servicer path"}</small></div>
-      <div><span>LAST CHECKPOINT</span><strong>{checkpoint ? `Block ${checkpoint.confirmation_block}` : "Awaiting first checkpoint"}</strong><code>{checkpoint?.checkpoint_hash || "No checkpoint hash"}</code></div>
+      <div><span>LAST CHECKPOINT</span><strong>{checkpointLabel}</strong><code>{checkpoint?.checkpoint_hash || "No checkpoint hash"}</code></div>
       <div><span>REDEMPTION QUEUE</span><strong>{redemptions.length}</strong><small>{redemptions.length ? `${redemptions.filter((item) => item.execution_status === "QUEUED").length} queued` : "No pending requests"}</small></div>
     </div><div className="takeover-detail"><section><div className="runtime-section-title"><h4>Account state difference</h4><span>{candidate?.candidateId || "NO VALIDATED CANDIDATE"}</span></div>
       {account ? <div className="state-diff"><code>{account.account}</code>{(["principal", "yield", "pendingRedemption"] as const).map((field) => <div key={field}><span>{field}</span><b>{account.previous[field]}</b><i>→</i><b>{account.reconstructed[field]}</b><em>{account.stateDiff[`${field === "pendingRedemption" ? "redemption" : field}Delta`]}</em></div>)}<small>{account.evidenceRefs.length} evidence references · confidence {(account.confidence * 100).toFixed(0)}%</small></div> : checkpointAccount ? <div className="state-diff"><code>{checkpointAccount.account}</code>{(["principal", "yield_amount", "pending_redemption"] as const).map((field) => <div key={field}><span>{field === "yield_amount" ? "yield" : field === "pending_redemption" ? "pendingRedemption" : field}</span><b>{checkpointAccount[field]}</b><i>·</i><b>CHECKPOINT</b><em>AI REVIEW PENDING</em></div>)}<small>Confirmed checkpoint state · updated {new Date(checkpointAccount.updated_at).toLocaleString()}</small></div> : <div className="runtime-empty compact"><strong>Asset-level state secured</strong><span>The recovery root is verified on X Layer. Account differences appear when account-level activity is present.</span></div>}
